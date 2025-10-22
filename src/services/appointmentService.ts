@@ -1,0 +1,312 @@
+import prisma from "../db/prisma";
+import { AppointmentStatus } from "@prisma/client";
+
+type CreateAppointmentInput = {
+  patientId: string;
+  doctorProfileId: string;
+  specialtyId: string;
+  appointmentDate: Date;
+  startTime: string;
+  notes?: string;
+};
+
+type AppointmentFilters = {
+  status?: AppointmentStatus;
+  dateFrom?: Date;
+  dateTo?: Date;
+};
+
+type AvailabilityFilters = {
+  date?: Date;
+  specialtyId?: string;
+  doctorProfileId?: string;
+};
+
+export const findDoctorProfile = async (doctorProfileId: string) => {
+  return prisma.doctorProfile.findUnique({
+    where: { id: doctorProfileId },
+    include: {
+      specialty: true,
+      user: true,
+      schedules: true,
+    },
+  });
+};
+
+export const findSpecialty = async (specialtyId: string) => {
+  return prisma.specialty.findUnique({
+    where: { id: specialtyId },
+  });
+};
+
+export const checkAppointmentConflict = async (
+  doctorProfileId: string,
+  appointmentDate: Date,
+  startTime: string,
+) => {
+  return prisma.appointment.findFirst({
+    where: {
+      doctorProfileId,
+      appointmentDate,
+      startTime,
+      status: {
+        not: "CANCELLED",
+      },
+    },
+  });
+};
+
+export const checkPatientDuplicateAppointment = async (
+  patientId: string,
+  doctorProfileId: string,
+  appointmentDate: Date,
+) => {
+  return prisma.appointment.findFirst({
+    where: {
+      patientId,
+      doctorProfileId,
+      appointmentDate,
+      status: {
+        not: "CANCELLED",
+      },
+    },
+  });
+};
+
+export const createAppointment = async (data: CreateAppointmentInput) => {
+  const [startHour, startMinute] = data.startTime.split(":").map(Number);
+  const endTime = `${String(startHour).padStart(2, "0")}:${String(startMinute + 30).padStart(2, "0")}`;
+
+  return prisma.appointment.create({
+    data: {
+      patientId: data.patientId,
+      doctorProfileId: data.doctorProfileId,
+      specialtyId: data.specialtyId,
+      appointmentDate: data.appointmentDate,
+      startTime: data.startTime,
+      endTime,
+      notes: data.notes,
+    },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+      doctorProfile: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          specialty: true,
+        },
+      },
+      specialty: true,
+    },
+  });
+};
+
+export const findAppointmentById = async (appointmentId: string) => {
+  return prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+      doctorProfile: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          specialty: true,
+        },
+      },
+      specialty: true,
+    },
+  });
+};
+
+export const cancelAppointment = async (
+  appointmentId: string,
+  cancellationReason: string,
+) => {
+  return prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      status: "CANCELLED",
+      cancellationReason,
+    },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+      doctorProfile: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          specialty: true,
+        },
+      },
+      specialty: true,
+    },
+  });
+};
+
+export const findPatientAppointments = async (
+  patientId: string,
+  filters: AppointmentFilters = {},
+) => {
+  const whereClause: any = {
+    patientId,
+  };
+
+  if (filters.status) {
+    whereClause.status = filters.status;
+  }
+
+  if (filters.dateFrom || filters.dateTo) {
+    whereClause.appointmentDate = {};
+    if (filters.dateFrom) {
+      whereClause.appointmentDate.gte = filters.dateFrom;
+    }
+    if (filters.dateTo) {
+      whereClause.appointmentDate.lte = filters.dateTo;
+    }
+  }
+
+  return prisma.appointment.findMany({
+    where: whereClause,
+    include: {
+      doctorProfile: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          specialty: true,
+        },
+      },
+      specialty: true,
+    },
+    orderBy: [{ appointmentDate: "asc" }, { startTime: "asc" }],
+  });
+};
+
+export const getAvailableTimeSlots = async (
+  filters: AvailabilityFilters = {},
+) => {
+  const whereClause: any = {
+    isActive: true,
+  };
+
+  if (filters.specialtyId) {
+    whereClause.specialtyId = filters.specialtyId;
+  }
+
+  if (filters.doctorProfileId) {
+    whereClause.id = filters.doctorProfileId;
+  }
+
+  const doctorProfiles = await prisma.doctorProfile.findMany({
+    where: whereClause,
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      specialty: true,
+      schedules: {
+        where: {
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  const availableSlots = [];
+  const targetDate = filters.date || new Date();
+  const dayOfWeek = targetDate.getDay();
+
+  for (const doctor of doctorProfiles) {
+    const schedule = doctor.schedules.find((s) => s.dayOfWeek === dayOfWeek);
+    if (!schedule) continue;
+
+    const startHour = parseInt(schedule.startTime.split(":")[0]);
+    const startMinute = parseInt(schedule.startTime.split(":")[1]);
+    const endHour = parseInt(schedule.endTime.split(":")[0]);
+    const endMinute = parseInt(schedule.endTime.split(":")[1]);
+
+    const bookedAppointments = await prisma.appointment.findMany({
+      where: {
+        doctorProfileId: doctor.id,
+        appointmentDate: targetDate,
+        status: {
+          not: "CANCELLED",
+        },
+      },
+      select: {
+        startTime: true,
+      },
+    });
+
+    const bookedTimes = new Set(bookedAppointments.map((apt) => apt.startTime));
+
+    let currentHour = startHour;
+    let currentMinute = startMinute;
+
+    while (
+      currentHour < endHour ||
+      (currentHour === endHour && currentMinute < endMinute)
+    ) {
+      const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
+
+      if (!bookedTimes.has(timeSlot)) {
+        availableSlots.push({
+          doctorProfile: {
+            id: doctor.id,
+            name: doctor.user.name,
+            specialty: doctor.specialty.name,
+          },
+          date: targetDate.toISOString().split("T")[0],
+          startTime: timeSlot,
+          endTime: `${String(currentHour).padStart(2, "0")}:${String(currentMinute + schedule.slotDuration).padStart(2, "0")}`,
+        });
+      }
+
+      currentMinute += schedule.slotDuration;
+      if (currentMinute >= 60) {
+        currentHour += Math.floor(currentMinute / 60);
+        currentMinute = currentMinute % 60;
+      }
+    }
+  }
+
+  return availableSlots;
+};
