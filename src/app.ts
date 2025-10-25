@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth";
 import adminRoutes from "./routes/admin";
 import profileRoutes from "./routes/profile";
 import appointmentRoutes from "./routes/appointments";
+import notificationRoutes from "./routes/notifications";
 
 const app = express();
 
@@ -22,5 +23,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", profileRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 export default app;

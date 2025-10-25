@@ -20,6 +20,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   appointments  Appointment[]  @relation("PatientAppointments")
   doctorProfile DoctorProfile?
+  notifications Notification[]
 }
 
 model Specialty {
@@ -83,6 +84,19 @@ model Appointment {
   @@unique([doctorProfileId, appointmentDate, startTime])
 }
 
+model Notification {
+  id        String            @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean           @default(false)
+  data      Json?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 enum Role {
   PATIENT
   SECRETARY
@@ -95,4 +109,11 @@ enum AppointmentStatus {
   CANCELLED
   COMPLETED
   NO_SHOW
+}
+
+enum NotificationType {
+  APPOINTMENT_REMINDER
+  APPOINTMENT_CONFIRMATION
+  APPOINTMENT_CANCELLATION
+  GENERAL
 }

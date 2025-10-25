@@ -28,6 +28,27 @@ export const statusSchema = z.object({
   isActive: z.boolean(),
 });
 
+export const createScheduleSchema = z.object({
+  doctorProfileId: z.string().min(1, "ID de médico requerido"),
+  dayOfWeek: z
+    .number()
+    .min(0)
+    .max(6, "Día de la semana debe estar entre 0 y 6"),
+  startTime: z
+    .string()
+    .regex(
+      /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+      "Formato de hora inválido (HH:mm)",
+    ),
+  endTime: z
+    .string()
+    .regex(
+      /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+      "Formato de hora inválido (HH:mm)",
+    ),
+  slotDuration: z.number().min(15).max(120).optional(),
+});
+
 export const validate =
   (schema: z.ZodTypeAny) =>
   (req: Request, res: Response, next: NextFunction) => {
@@ -44,4 +65,4 @@ export const validate =
       }
       return res.status(400).json({ message: "Validation error" });
     }
-};
+  };
