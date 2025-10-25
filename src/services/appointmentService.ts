@@ -1,5 +1,6 @@
 import prisma from "../db/prisma";
 import { AppointmentStatus } from "@prisma/client";
+import * as NotificationService from "./notificationService";
 
 type CreateAppointmentInput = {
   patientId: string;
@@ -77,7 +78,7 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
   const [startHour, startMinute] = data.startTime.split(":").map(Number);
   const endTime = `${String(startHour).padStart(2, "0")}:${String(startMinute + 30).padStart(2, "0")}`;
 
-  return prisma.appointment.create({
+  const appointment = await prisma.appointment.create({
     data: {
       patientId: data.patientId,
       doctorProfileId: data.doctorProfileId,
@@ -110,6 +111,15 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
       specialty: true,
     },
   });
+
+  await NotificationService.createAppointmentConfirmation(data.patientId, {
+    appointmentDate: data.appointmentDate.toISOString().split("T")[0],
+    startTime: data.startTime,
+    doctorName: appointment.doctorProfile.user.name,
+    specialty: appointment.specialty.name,
+  });
+
+  return appointment;
 };
 
 export const findAppointmentById = async (appointmentId: string) => {
@@ -144,7 +154,7 @@ export const cancelAppointment = async (
   appointmentId: string,
   cancellationReason: string,
 ) => {
-  return prisma.appointment.update({
+  const appointment = await prisma.appointment.update({
     where: { id: appointmentId },
     data: {
       status: "CANCELLED",
@@ -173,6 +183,19 @@ export const cancelAppointment = async (
       specialty: true,
     },
   });
+
+  await NotificationService.createAppointmentCancellation(
+    appointment.patientId,
+    {
+      appointmentDate: appointment.appointmentDate.toISOString().split("T")[0],
+      startTime: appointment.startTime,
+      doctorName: appointment.doctorProfile.user.name,
+      specialty: appointment.specialty.name,
+      reason: cancellationReason,
+    },
+  );
+
+  return appointment;
 };
 
 export const findPatientAppointments = async (
