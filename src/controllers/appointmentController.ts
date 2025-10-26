@@ -30,6 +30,17 @@ export const createAppointment = async (req: Request, res: Response) => {
 
     const appointmentDateObj = new Date(appointmentDate);
 
+    const scheduleValidation = await AppointmentService.validateDoctorSchedule(
+      doctorProfileId,
+      appointmentDateObj,
+      startTime,
+    );
+    if (!scheduleValidation.isValid) {
+      return res.status(400).json({
+        message: scheduleValidation.message,
+      });
+    }
+
     const existingAppointment =
       await AppointmentService.checkAppointmentConflict(
         doctorProfileId,

@@ -240,6 +240,72 @@ export const findPatientAppointments = async (
   });
 };
 
+export const validateDoctorSchedule = async (
+  doctorProfileId: string,
+  appointmentDate: Date,
+  startTime: string,
+) => {
+  const doctorProfile = await prisma.doctorProfile.findUnique({
+    where: { id: doctorProfileId },
+    include: {
+      schedules: {
+        where: {
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (!doctorProfile) {
+    return { isValid: false, message: "Médico no encontrado" };
+  }
+
+  const dayOfWeek = appointmentDate.getDay();
+  const schedule = doctorProfile.schedules.find(
+    (s) => s.dayOfWeek === dayOfWeek,
+  );
+
+  if (!schedule) {
+    return {
+      isValid: false,
+      message: "El médico no tiene horario de atención para este día",
+    };
+  }
+
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const appointmentTimeInMinutes = startHour * 60 + startMinute;
+
+  const [scheduleStartHour, scheduleStartMinute] = schedule.startTime
+    .split(":")
+    .map(Number);
+  const scheduleStartInMinutes = scheduleStartHour * 60 + scheduleStartMinute;
+
+  const [scheduleEndHour, scheduleEndMinute] = schedule.endTime
+    .split(":")
+    .map(Number);
+  const scheduleEndInMinutes = scheduleEndHour * 60 + scheduleEndMinute;
+
+  if (
+    appointmentTimeInMinutes < scheduleStartInMinutes ||
+    appointmentTimeInMinutes >= scheduleEndInMinutes
+  ) {
+    return {
+      isValid: false,
+      message: `El médico atiende de ${schedule.startTime} a ${schedule.endTime} este día`,
+    };
+  }
+
+  const minutesFromStart = appointmentTimeInMinutes - scheduleStartInMinutes;
+  if (minutesFromStart % schedule.slotDuration !== 0) {
+    return {
+      isValid: false,
+      message: `Las citas deben ser programadas en intervalos de ${schedule.slotDuration} minutos`,
+    };
+  }
+
+  return { isValid: true, message: "Horario válido" };
+};
+
 export const getAvailableTimeSlots = async (
   filters: AvailabilityFilters = {},
 ) => {
