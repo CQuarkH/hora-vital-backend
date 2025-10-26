@@ -29,7 +29,7 @@ export default async function globalSetup() {
     // Configurar variables de entorno
     process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'test';
-    process.env.JWT_SECRET = 'test-jwt-secret';
+    process.env.JWT_SECRET = 'changeme_in_dev_use_secure_secret_in_prod';
 
     // Esperar a que PostgreSQL esté completamente listo
     await new Promise(resolve => setTimeout(resolve, 5000));

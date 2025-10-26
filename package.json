@@ -11,7 +11,7 @@
     "prisma:migrate": "prisma migrate dev",
     "lint": "eslint . --ext .ts",
     "test:integration": "jest tests/integration --verbose",
-    "test:it": "jest --testMatch='**/IT-*.test.ts'"
+    "test:it": "jest --runInBand --testMatch='**/IT-*.test.ts'"
   },
   "keywords": [],
   "author": "",

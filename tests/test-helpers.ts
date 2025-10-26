@@ -6,9 +6,11 @@ let prisma: PrismaClient;
 
 /**
  * Obtener instancia de Prisma para tests
+ * IMPORTANTE: Crear nueva instancia cada vez para evitar cache
  */
 export function getPrismaClient(): PrismaClient {
     if (!prisma) {
+        console.log('Creando nueva instancia de PrismaClient para tests');
         prisma = new PrismaClient({
             datasources: {
                 db: {
@@ -24,33 +26,56 @@ export function getPrismaClient(): PrismaClient {
  * Generar token JWT para tests
  */
 export function generateTestToken(userId: string): string {
-    const JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
+    const JWT_SECRET = process.env.JWT_SECRET || 'changeme_in_dev_use_secure_secret_in_prod';
     return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 /**
- * Limpiar todas las tablas según el schema real
+ * Limpiar BD desactivando temporalmente las constraints
  */
 export async function cleanDatabase(): Promise<void> {
-    const prisma = getPrismaClient();
+    const client = getPrismaClient();
 
     try {
-        // Desactivar foreign key checks temporalmente
-        await prisma.$executeRaw`SET session_replication_role = 'replica';`;
+        // Desactivar todas las constraints de FK temporalmente
+        await client.$executeRawUnsafe(`
+      DO $$ 
+      DECLARE 
+        r RECORD;
+      BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+          EXECUTE 'ALTER TABLE IF EXISTS ' || quote_ident(r.tablename) || ' DISABLE TRIGGER ALL';
+        END LOOP;
+      END $$;
+    `);
 
-        // Intentar limpiar cada tabla individualmente
-        const tables = ['Appointment', 'Schedule', 'DoctorProfile', 'Specialty', 'User'];
+        // Ahora sí podemos truncar todo
+        await client.$executeRawUnsafe(`
+      TRUNCATE TABLE 
+        "Notification",
+        "Schedule", 
+        "Appointment", 
+        "DoctorProfile", 
+        "Specialty", 
+        "User" 
+      RESTART IDENTITY CASCADE;
+    `);
 
-        for (const table of tables) {
-            try {
-                await prisma.$executeRawUnsafe(`TRUNCATE TABLE "${table}" CASCADE;`);
-            } catch (err) {
-                console.warn(`Tabla ${table} no existe o no se pudo limpiar`);
-            }
-        }
+        // Reactivar constraints
+        await client.$executeRawUnsafe(`
+      DO $$ 
+      DECLARE 
+        r RECORD;
+      BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+          EXECUTE 'ALTER TABLE IF EXISTS ' || quote_ident(r.tablename) || ' ENABLE TRIGGER ALL';
+        END LOOP;
+      END $$;
+    `);
 
-        // Reactivar foreign key checks
-        await prisma.$executeRaw`SET session_replication_role = 'origin';`;
+        // Esperar un momento para asegurar que la BD esté lista
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
     } catch (error) {
         console.error('Error en cleanDatabase:', error);
         throw error;
@@ -63,6 +88,7 @@ export async function cleanDatabase(): Promise<void> {
 export async function disconnectPrisma(): Promise<void> {
     if (prisma) {
         await prisma.$disconnect();
+        prisma = null!;
     }
 }
 
@@ -92,7 +118,7 @@ export const TestFactory = {
      */
     createSpecialty: (overrides = {}) => ({
         id: uuidv4(),
-        name: `Medicina General ${Date.now()}`,
+        name: `Medicina General ${new Date().getMilliseconds()}`,
         description: 'Especialidad médica general',
         isActive: true,
         createdAt: new Date(),

@@ -2,6 +2,15 @@ import request from 'supertest';
 import { getPrismaClient, cleanDatabase, TestFactory, generateTestToken } from '../test-helpers';
 import { PrismaClient } from '@prisma/client';
 
+// ✅ Mock COMPLETO del módulo emailService
+jest.mock('../../src/services/emailService', () => ({
+    sendAppointmentConfirmation: jest.fn().mockResolvedValue(undefined),
+    sendAppointmentCancellation: jest.fn().mockResolvedValue(undefined),
+    __esModule: true,
+}));
+// Importar DESPUÉS del mock
+import * as EmailService from '../../src/services/emailService';
+
 /**
  * IT-1: Agendar Cita Médica (Flujo Feliz)
  */
@@ -22,6 +31,11 @@ describe('IT-1: Agendar Cita Médica (Flujo Feliz)', () => {
 
     beforeEach(async () => {
         await cleanDatabase();
+        prisma = getPrismaClient();
+
+        jest.clearAllMocks();
+
+        (EmailService.sendAppointmentConfirmation as jest.Mock).mockResolvedValue(undefined);
 
         // Crear especialidad
         const specialty = await prisma.specialty.create({
@@ -90,8 +104,6 @@ describe('IT-1: Agendar Cita Médica (Flujo Feliz)', () => {
         }
 
         expect(response.status).toBe(201);
-
-        // Tu API devuelve { appointment: {...}, message: "..." }
         expect(response.body).toHaveProperty('appointment');
         expect(response.body).toHaveProperty('message');
 
