@@ -3,6 +3,13 @@ import { Request, Response } from "express";
 import * as AdminService from "../services/adminService";
 import { Prisma } from "@prisma/client";
 
+let PrismaClientKnownRequestError: any;
+try {
+  PrismaClientKnownRequestError = require("@prisma/client/runtime").PrismaClientKnownRequestError;
+} catch (e) {
+  PrismaClientKnownRequestError = undefined;
+}
+
 export const listUsers = async (req: Request, res: Response) => {
   try {
     const page = Number(req.query.page ?? 1);
@@ -32,8 +39,8 @@ export const createUser = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("createUser error", err);
     if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
+      (PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === "P2002") ||
+      ((err as any)?.code === "P2002")
     ) {
       return res.status(409).json({ message: "Email ya registrado" });
     }
@@ -50,8 +57,8 @@ export const updateUser = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("updateUser error", err);
     if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
+      (PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === "P2002") ||
+      ((err as any)?.code === "P2002")
     ) {
       return res.status(409).json({ message: "Email ya registrado" });
     }
@@ -130,6 +137,19 @@ export const createSchedule = async (req: Request, res: Response) => {
       });
     }
 
+    const conflictingAppointment = await AdminService.findConflictingAppointments(
+      doctorProfileId,
+      Number(dayOfWeek),
+      startTime,
+      endTime
+    );
+
+    if (conflictingAppointment) {
+      return res.status(409).json({
+        message: `El horario se solapa con una cita ya agendada.`,
+      });
+    }
+
     const schedule = await AdminService.createSchedule({
       doctorProfileId,
       dayOfWeek: Number(dayOfWeek),
@@ -138,12 +158,12 @@ export const createSchedule = async (req: Request, res: Response) => {
       slotDuration: slotDuration || 30,
     });
 
-    return res.status(201).json({
-      message: "Horario creado exitosamente",
-      schedule,
-    });
-  } catch (err) {
+    return res.status(201).json(schedule);
+  } catch (err: any) {
     console.error("createSchedule error", err);
+    if ((PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === 'P2002') || ((err as any)?.code === 'P2002')) {
+      return res.status(409).json({ message: "Error de duplicidad al crear horario" });
+    }
     return res.status(500).json({ message: "Error de servidor" });
   }
 };
