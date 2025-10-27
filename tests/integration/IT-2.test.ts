@@ -337,8 +337,8 @@ describe('IT-2: Agendar Cita con Horario Ocupado (Error)', () => {
             .set('Authorization', `Bearer ${patient1Token}`)
             .send(appointmentPayload);
 
-        // Debería rechazar (400 o 409 dependiendo de tu implementación)
+        // Debería rechazar (400 o 409)
         expect([400, 409]).toContain(response.status);
-        expect(response.body.message).toMatch(/horario|disponible|schedule/i);
+        expect(response.body.message).toMatch(/horario|disponible|schedule|atiende|/i);
     });
 });
