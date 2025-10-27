@@ -1,6 +1,14 @@
 // src/services/profileService.ts
 import prisma from '../db/prisma';
 import { Prisma } from '@prisma/client';
+
+let PrismaClientKnownRequestError: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  PrismaClientKnownRequestError = require('@prisma/client/runtime').PrismaClientKnownRequestError;
+} catch (e) {
+  PrismaClientKnownRequestError = undefined;
+}
 import bcrypt from 'bcrypt';
 import { BCRYPT_SALT_ROUNDS } from '../config';
 
@@ -37,7 +45,7 @@ export const updateOwnProfile = async (userId: string, data: UpdateProfileInput)
     });
     return user;
   } catch (err: any) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if ((PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === 'P2002') || ((err as any)?.code === 'P2002')) {
       const e: any = new Error('Email already exists');
       e.code = 'P2002';
       throw e;
