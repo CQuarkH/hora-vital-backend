@@ -3,6 +3,13 @@ import prisma from "../db/prisma";
 import bcrypt from "bcrypt";
 import { BCRYPT_SALT_ROUNDS } from "../config";
 import { Prisma } from "@prisma/client";
+
+let PrismaClientKnownRequestError: any;
+try {
+  PrismaClientKnownRequestError = require("@prisma/client/runtime").PrismaClientKnownRequestError;
+} catch (e) {
+  PrismaClientKnownRequestError = undefined;
+}
 import { v4 as uuidv4 } from "uuid";
 
 type CreateInput = {
@@ -76,8 +83,8 @@ export const createUser = async (data: CreateInput) => {
     return user;
   } catch (err: any) {
     if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
+      (PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === "P2002") ||
+      ((err as any)?.code === "P2002")
     ) {
       const e: any = new Error("Email already exists");
       e.code = "P2002";
@@ -106,8 +113,8 @@ export const updateUser = async (id: string, data: UpdateInput) => {
     return user;
   } catch (err: any) {
     if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
+      (PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === "P2002") ||
+      ((err as any)?.code === "P2002")
     ) {
       const e: any = new Error("Email already exists");
       e.code = "P2002";
@@ -280,4 +287,28 @@ export const createSchedule = async (data: CreateScheduleInput) => {
       },
     },
   });
+};
+
+export const findConflictingAppointments = async (
+  doctorProfileId: string,
+  dayOfWeek: number,
+  newStartTime: string,
+  newEndTime: string,
+) => {
+  try {
+    const conflicts: any[] = await prisma.$queryRaw`
+      SELECT * FROM "Appointment"
+      WHERE "doctorProfileId" = ${doctorProfileId}
+        AND "status" = 'SCHEDULED'
+        AND EXTRACT(DOW FROM "appointmentDate") = ${dayOfWeek}
+        AND CAST("startTime" AS TIME) < CAST(${newEndTime} AS TIME)
+        AND CAST("endTime" AS TIME) > CAST(${newStartTime} AS TIME)
+      LIMIT 1;
+    `;
+
+    return conflicts.length > 0 ? conflicts[0] : null;
+  } catch (error) {
+    console.error("Error en findConflictingAppointments:", error);
+    throw new Error("Error al verificar conflictos de citas");
+  }
 };
