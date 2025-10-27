@@ -19,6 +19,7 @@
   "description": "",
   "devDependencies": {
     "@cucumber/cucumber": "^12.2.0",
+    "@testcontainers/postgresql": "^11.7.2",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
