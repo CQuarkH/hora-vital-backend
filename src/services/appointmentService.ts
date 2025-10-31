@@ -76,7 +76,15 @@ export const checkPatientDuplicateAppointment = async (
 
 export const createAppointment = async (data: CreateAppointmentInput) => {
   const [startHour, startMinute] = data.startTime.split(":").map(Number);
-  const endTime = `${String(startHour).padStart(2, "0")}:${String(startMinute + 30).padStart(2, "0")}`;
+  const totalMinutes = startMinute + 30;
+  let endHour = startHour + Math.floor(totalMinutes / 60);
+  const endMinute = totalMinutes % 60;
+
+  if (endHour >= 24) {
+    endHour = endHour % 24;
+  }
+
+  const endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
 
   const appointment = await prisma.appointment.create({
     data: {
@@ -377,6 +385,11 @@ export const getAvailableTimeSlots = async (
       const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
 
       if (!bookedTimes.has(timeSlot)) {
+        const endTimeMinutes = currentMinute + schedule.slotDuration;
+        const endTimeHour = currentHour + Math.floor(endTimeMinutes / 60);
+        const endTimeMinute = endTimeMinutes % 60;
+        const endTime = `${String(endTimeHour).padStart(2, "0")}:${String(endTimeMinute).padStart(2, "0")}`;
+
         availableSlots.push({
           doctorProfile: {
             id: doctor.id,
@@ -385,7 +398,7 @@ export const getAvailableTimeSlots = async (
           },
           date: targetDate.toISOString().split("T")[0],
           startTime: timeSlot,
-          endTime: `${String(currentHour).padStart(2, "0")}:${String(currentMinute + schedule.slotDuration).padStart(2, "0")}`,
+          endTime,
         });
       }
 
