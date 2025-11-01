@@ -102,13 +102,33 @@ export const createAppointmentConfirmation = async (
     data: appointmentData,
   });
 
+  if (process.env.NODE_ENV === "test") {
+    console.log(
+      `Email confirmation would be sent to user ${userId} (test mode - not sending)`,
+    );
+    return notification;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true },
   });
 
   if (user?.email) {
-    await EmailService.sendAppointmentConfirmation(user.email, appointmentData);
+    try {
+      await EmailService.sendAppointmentConfirmation(
+        user.email,
+        appointmentData,
+      );
+      console.log(`Email confirmation sent successfully to ${user.email}`);
+    } catch (error) {
+      console.error(
+        `Failed to send appointment confirmation email to ${user.email}:`,
+        error,
+      );
+      // Email failure should not prevent the notification from being created
+      // The notification is already saved in the database
+    }
   }
 
   return notification;
@@ -126,13 +146,34 @@ export const createAppointmentCancellation = async (
     data: appointmentData,
   });
 
+  // Skip email sending in test environment
+  if (process.env.NODE_ENV === "test") {
+    console.log(
+      `Email cancellation would be sent to user ${userId} (test mode - not sending)`,
+    );
+    return notification;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true },
   });
 
   if (user?.email) {
-    await EmailService.sendAppointmentCancellation(user.email, appointmentData);
+    try {
+      await EmailService.sendAppointmentCancellation(
+        user.email,
+        appointmentData,
+      );
+      console.log(`Email cancellation sent successfully to ${user.email}`);
+    } catch (error) {
+      console.error(
+        `Failed to send appointment cancellation email to ${user.email}:`,
+        error,
+      );
+      // Email failure should not prevent the notification from being created
+      // The notification is already saved in the database
+    }
   }
 
   return notification;
