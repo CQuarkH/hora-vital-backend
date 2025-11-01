@@ -76,7 +76,15 @@ export const checkPatientDuplicateAppointment = async (
 
 export const createAppointment = async (data: CreateAppointmentInput) => {
   const [startHour, startMinute] = data.startTime.split(":").map(Number);
-  const endTime = `${String(startHour).padStart(2, "0")}:${String(startMinute + 30).padStart(2, "0")}`;
+  const totalMinutes = startMinute + 30;
+  let endHour = startHour + Math.floor(totalMinutes / 60);
+  const endMinute = totalMinutes % 60;
+
+  if (endHour >= 24) {
+    endHour = endHour % 24;
+  }
+
+  const endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
 
   const appointment = await prisma.appointment.create({
     data: {
@@ -112,12 +120,22 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
     },
   });
 
-  await NotificationService.createAppointmentConfirmation(data.patientId, {
-    appointmentDate: data.appointmentDate.toISOString().split("T")[0],
-    startTime: data.startTime,
-    doctorName: appointment.doctorProfile.user.name,
-    specialty: appointment.specialty.name,
-  });
+  // Send notification - this should not fail the appointment creation
+  try {
+    await NotificationService.createAppointmentConfirmation(data.patientId, {
+      appointmentDate: data.appointmentDate.toISOString().split("T")[0],
+      startTime: data.startTime,
+      doctorName: appointment.doctorProfile.user.name,
+      specialty: appointment.specialty.name,
+    });
+  } catch (error) {
+    console.error(
+      "Failed to create appointment confirmation notification:",
+      error,
+    );
+    // Continue execution - appointment was created successfully
+    // Notification failure should not prevent appointment creation
+  }
 
   return appointment;
 };
@@ -184,16 +202,28 @@ export const cancelAppointment = async (
     },
   });
 
-  await NotificationService.createAppointmentCancellation(
-    appointment.patientId,
-    {
-      appointmentDate: appointment.appointmentDate.toISOString().split("T")[0],
-      startTime: appointment.startTime,
-      doctorName: appointment.doctorProfile.user.name,
-      specialty: appointment.specialty.name,
-      reason: cancellationReason,
-    },
-  );
+  // Send cancellation notification - this should not fail the cancellation process
+  try {
+    await NotificationService.createAppointmentCancellation(
+      appointment.patientId,
+      {
+        appointmentDate: appointment.appointmentDate
+          .toISOString()
+          .split("T")[0],
+        startTime: appointment.startTime,
+        doctorName: appointment.doctorProfile.user.name,
+        specialty: appointment.specialty.name,
+        reason: cancellationReason,
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Failed to create appointment cancellation notification:",
+      error,
+    );
+    // Continue execution - appointment was cancelled successfully
+    // Notification failure should not prevent appointment cancellation
+  }
 
   return appointment;
 };
@@ -377,6 +407,11 @@ export const getAvailableTimeSlots = async (
       const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
 
       if (!bookedTimes.has(timeSlot)) {
+        const endTimeMinutes = currentMinute + schedule.slotDuration;
+        const endTimeHour = currentHour + Math.floor(endTimeMinutes / 60);
+        const endTimeMinute = endTimeMinutes % 60;
+        const endTime = `${String(endTimeHour).padStart(2, "0")}:${String(endTimeMinute).padStart(2, "0")}`;
+
         availableSlots.push({
           doctorProfile: {
             id: doctor.id,
@@ -385,7 +420,7 @@ export const getAvailableTimeSlots = async (
           },
           date: targetDate.toISOString().split("T")[0],
           startTime: timeSlot,
-          endTime: `${String(currentHour).padStart(2, "0")}:${String(currentMinute + schedule.slotDuration).padStart(2, "0")}`,
+          endTime,
         });
       }
 

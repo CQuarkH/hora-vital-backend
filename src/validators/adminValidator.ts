@@ -11,7 +11,10 @@ export const adminCreateSchema = z.object({
     .regex(/(?=.*[a-z])/, "Debe contener minúscula")
     .regex(/(?=.*[A-Z])/, "Debe contener mayúscula")
     .regex(/(?=.*\d)/, "Debe contener número"),
-  role: z.enum(["PATIENT", "SECRETARY", "ADMIN"]).optional().default("PATIENT"),
+  role: z
+    .enum(["PATIENT", "SECRETARY", "ADMIN", "DOCTOR"])
+    .optional()
+    .default("PATIENT"),
   rut: z.string().optional(),
   phone: z.string().optional(),
 });
