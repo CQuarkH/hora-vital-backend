@@ -11,7 +11,10 @@
     "prisma:migrate": "prisma migrate dev",
     "lint": "eslint . --ext .ts",
     "test:integration": "jest tests/integration --verbose",
-    "test:it": "jest --runInBand --testMatch='**/IT-*.test.ts'"
+    "test:it": "jest --runInBand --testMatch='**/IT-*.test.ts'",
+    "test:unit": "jest -c tests/unit/jest.unit.config.ts --runInBand --coverage",
+    "sonar:up": "docker-compose up -d sonar_db sonarqube",
+    "sonar:down": "docker-compose down sonarqube sonar_db"
   },
   "keywords": [],
   "author": "",
