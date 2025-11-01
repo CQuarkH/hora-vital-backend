@@ -1,8 +1,7 @@
-// src/services/authService.ts
-import prisma from '../db/prisma';
-import bcrypt from 'bcrypt';
-import * as jwt from 'jsonwebtoken';
-import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS } from '../config';
+import prisma from "../db/prisma";
+import bcrypt from "bcrypt";
+import * as jwt from "jsonwebtoken";
+import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS } from "../config";
 
 type RegisterInput = {
   name: string;
@@ -35,6 +34,8 @@ export const verifyPassword = async (plain: string, hash: string) => {
 };
 
 export const generateToken = (payload: object) => {
-  const token = (jwt as unknown as any).sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  const token = (jwt as unknown as any).sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
+  });
   return token as string;
 };

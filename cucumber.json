@@ -1,6 +1,9 @@
 {
   "default": {
-    "require": ["tests/step_definitions/**/*.ts"],
+    "require": [
+      "tests/step_definitions/hooks.ts",
+      "tests/step_definitions/**/*.ts"
+    ],
     "requireModule": ["ts-node/register"],
     "format": ["progress"],
     "paths": ["tests/features/**/*.feature"],

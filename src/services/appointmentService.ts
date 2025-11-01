@@ -120,12 +120,22 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
     },
   });
 
-  await NotificationService.createAppointmentConfirmation(data.patientId, {
-    appointmentDate: data.appointmentDate.toISOString().split("T")[0],
-    startTime: data.startTime,
-    doctorName: appointment.doctorProfile.user.name,
-    specialty: appointment.specialty.name,
-  });
+  // Send notification - this should not fail the appointment creation
+  try {
+    await NotificationService.createAppointmentConfirmation(data.patientId, {
+      appointmentDate: data.appointmentDate.toISOString().split("T")[0],
+      startTime: data.startTime,
+      doctorName: appointment.doctorProfile.user.name,
+      specialty: appointment.specialty.name,
+    });
+  } catch (error) {
+    console.error(
+      "Failed to create appointment confirmation notification:",
+      error,
+    );
+    // Continue execution - appointment was created successfully
+    // Notification failure should not prevent appointment creation
+  }
 
   return appointment;
 };
@@ -192,16 +202,28 @@ export const cancelAppointment = async (
     },
   });
 
-  await NotificationService.createAppointmentCancellation(
-    appointment.patientId,
-    {
-      appointmentDate: appointment.appointmentDate.toISOString().split("T")[0],
-      startTime: appointment.startTime,
-      doctorName: appointment.doctorProfile.user.name,
-      specialty: appointment.specialty.name,
-      reason: cancellationReason,
-    },
-  );
+  // Send cancellation notification - this should not fail the cancellation process
+  try {
+    await NotificationService.createAppointmentCancellation(
+      appointment.patientId,
+      {
+        appointmentDate: appointment.appointmentDate
+          .toISOString()
+          .split("T")[0],
+        startTime: appointment.startTime,
+        doctorName: appointment.doctorProfile.user.name,
+        specialty: appointment.specialty.name,
+        reason: cancellationReason,
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Failed to create appointment cancellation notification:",
+      error,
+    );
+    // Continue execution - appointment was cancelled successfully
+    // Notification failure should not prevent appointment cancellation
+  }
 
   return appointment;
 };

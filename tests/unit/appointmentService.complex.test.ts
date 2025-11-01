@@ -449,9 +449,16 @@ describe("AppointmentService - Complex Flows", () => {
         new Error("Notification service unavailable"),
       );
 
-      await expect(
-        AppointmentService.cancelAppointment("appointment-1", "Emergency"),
-      ).rejects.toThrow("Notification service unavailable");
+      // Should not throw - appointment cancellation should succeed even if notification fails
+      const result = await AppointmentService.cancelAppointment(
+        "appointment-1",
+        "Emergency",
+      );
+
+      // Verify the appointment was cancelled successfully
+      expect(result).toEqual(mockCancelledAppointment);
+      expect(result.status).toBe("CANCELLED");
+      expect(result.cancellationReason).toBe("Emergency");
 
       expect(mockPrisma.appointment.update).toHaveBeenCalledWith({
         where: { id: "appointment-1" },
