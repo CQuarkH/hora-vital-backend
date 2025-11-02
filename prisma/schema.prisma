@@ -9,13 +9,17 @@ datasource db {
 
 model User {
   id            String         @id @default(uuid())
-  name          String
-  rut           String?        @unique
+  firstName     String
+  lastName      String
+  rut           String         @unique
   email         String         @unique
   phone         String?
   password      String
   role          Role           @default(PATIENT)
   isActive      Boolean        @default(true)
+  gender        String?
+  birthDate     DateTime?
+  address       String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   appointments  Appointment[]  @relation("PatientAppointments")
