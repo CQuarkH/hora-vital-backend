@@ -1,19 +1,21 @@
 // src/services/profileService.ts
-import prisma from '../db/prisma';
-import { Prisma } from '@prisma/client';
+import prisma from "../db/prisma";
+import bcrypt from "bcrypt";
+import { BCRYPT_SALT_ROUNDS } from "../config";
+import { Prisma } from "@prisma/client";
+
 
 let PrismaClientKnownRequestError: any;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  PrismaClientKnownRequestError = require('@prisma/client/runtime').PrismaClientKnownRequestError;
+  PrismaClientKnownRequestError =
+    require("@prisma/client/runtime").PrismaClientKnownRequestError;
 } catch (e) {
-  PrismaClientKnownRequestError = undefined;
+  PrismaClientKnownRequestError = Prisma.PrismaClientKnownRequestError;
 }
-import bcrypt from 'bcrypt';
-import { BCRYPT_SALT_ROUNDS } from '../config';
 
 type UpdateProfileInput = {
-  name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   password?: string;
@@ -21,7 +23,8 @@ type UpdateProfileInput = {
 
 const userSelect = {
   id: true,
-  name: true,
+  firstName: true,
+  lastName: true,
   email: true,
   phone: true,
   role: true,
@@ -29,12 +32,19 @@ const userSelect = {
   isActive: true,
   createdAt: true,
   updatedAt: true,
+  gender: true,
+  birthDate: true,
+  address: true,
 };
 
-export const updateOwnProfile = async (userId: string, data: UpdateProfileInput) => {
+export const updateOwnProfile = async (
+  userId: string,
+  data: UpdateProfileInput
+) => {
   const updateData: any = { ...data };
   if (data.password) {
-    updateData.password = await bcrypt.hash(String(data.password), Number(BCRYPT_SALT_ROUNDS));
+    const saltRounds = Number(BCRYPT_SALT_ROUNDS ?? 10);
+    updateData.password = await bcrypt.hash(String(data.password), saltRounds);
   }
 
   try {
@@ -45,9 +55,19 @@ export const updateOwnProfile = async (userId: string, data: UpdateProfileInput)
     });
     return user;
   } catch (err: any) {
-    if ((PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === 'P2002') || ((err as any)?.code === 'P2002')) {
-      const e: any = new Error('Email already exists');
-      e.code = 'P2002';
+    if (
+      (PrismaClientKnownRequestError &&
+        err instanceof PrismaClientKnownRequestError &&
+        err.code === "P2002") ||
+      err?.code === "P2002"
+    ) {
+      const e: any = new Error("Email already exists");
+      e.code = "P2002";
+      throw e;
+    }
+    if (err?.code === "P2025") {
+      const e: any = new Error("Record not found");
+      e.code = "P2025";
       throw e;
     }
     throw err;
@@ -55,5 +75,8 @@ export const updateOwnProfile = async (userId: string, data: UpdateProfileInput)
 };
 
 export const getProfile = async (userId: string) => {
-  return prisma.user.findUnique({ where: { id: userId }, select: userSelect });
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: userSelect,
+  });
 };

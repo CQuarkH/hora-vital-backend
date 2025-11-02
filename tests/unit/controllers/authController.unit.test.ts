@@ -3,7 +3,7 @@ import * as AuthService from "../../../src/services/authService";
 import * as AuthController from "../../../src/controllers/authController";
 import { createMockResponse } from "../helpers/mockResponse";
 
-jest.mock("@/services/authService");
+jest.mock("../../../src/services/authService");
 
 const mockedAuthService = AuthService as unknown as jest.Mocked<
   typeof AuthService

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
-import * as AppointmentService from "../../src/services/appointmentService";
-import * as NotificationService from "../../src/services/notificationService";
-import prisma from "../../src/db/prisma";
+import * as AppointmentService from "../../../src/services/appointmentService";
+import * as NotificationService from "../../../src/services/notificationService";
+import prisma from "../../../src/db/prisma";
 
 // Mock dependencies
-jest.mock("../../src/services/notificationService");
-jest.mock("../../src/db/prisma", () => ({
+jest.mock("../../../src/services/notificationService");
+jest.mock("../../../src/db/prisma", () => ({
   doctorProfile: {
     findUnique: jest.fn(),
     findMany: jest.fn(),

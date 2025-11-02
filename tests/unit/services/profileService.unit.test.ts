@@ -1,5 +1,4 @@
 // tests/unit/services/profileService.unit.test.ts
-
 const mockedPrisma = {
   user: {
     findUnique: jest.fn(),
@@ -11,11 +10,11 @@ const mockedBcrypt = {
   hash: jest.fn(),
 };
 
-jest.mock("@/db/prisma", () => ({ __esModule: true, default: mockedPrisma }));
+jest.mock("../../../src/db/prisma", () => ({ __esModule: true, default: mockedPrisma }));
 jest.mock("bcrypt", () => mockedBcrypt);
 
 const ProfileService =
-  require("@/services/profileService") as typeof import("../../../src/services/profileService");
+  require("../../../src/services/profileService") as typeof import("../../../src/services/profileService");
 
 import { BCRYPT_SALT_ROUNDS } from "../../../src/config";
 
@@ -27,23 +26,27 @@ describe("profileService (unit)", () => {
 
   describe("getProfile", () => {
     it("returns user from prisma", async () => {
-      mockedPrisma.user.findUnique.mockResolvedValue({ id: "1", name: "A" });
+      mockedPrisma.user.findUnique.mockResolvedValue({
+        id: "1",
+        firstName: "A",
+        lastName: "L",
+      });
       const u = await ProfileService.getProfile("1");
       expect(mockedPrisma.user.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "1" } })
       );
-      expect(u).toEqual({ id: "1", name: "A" });
+      expect(u).toEqual({ id: "1", firstName: "A", lastName: "L" });
     });
   });
 
   describe("updateOwnProfile", () => {
     it("hashes password when provided and updates", async () => {
       mockedBcrypt.hash.mockResolvedValue("hashed-new");
-      const updated = { id: "1", name: "B" };
+      const updated = { id: "1", firstName: "B" };
       mockedPrisma.user.update.mockResolvedValue(updated);
 
       const out = await ProfileService.updateOwnProfile("1", {
-        name: "B",
+        firstName: "B",
         password: "newpass",
       });
 
@@ -54,7 +57,10 @@ describe("profileService (unit)", () => {
       expect(mockedPrisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "1" },
-          data: expect.objectContaining({ name: "B", password: "hashed-new" }),
+          data: expect.objectContaining({
+            firstName: "B",
+            password: "hashed-new",
+          }),
           select: expect.any(Object),
         })
       );

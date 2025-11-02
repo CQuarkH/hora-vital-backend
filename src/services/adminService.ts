@@ -2,30 +2,21 @@
 import prisma from "../db/prisma";
 import bcrypt from "bcrypt";
 import { BCRYPT_SALT_ROUNDS } from "../config";
+import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "@prisma/client";
 
 let PrismaClientKnownRequestError: any;
 try {
-  PrismaClientKnownRequestError = require("@prisma/client/runtime").PrismaClientKnownRequestError;
+  PrismaClientKnownRequestError =
+    require("@prisma/client/runtime").PrismaClientKnownRequestError;
 } catch (e) {
-  PrismaClientKnownRequestError = undefined;
+  PrismaClientKnownRequestError = Prisma.PrismaClientKnownRequestError;
 }
-import { v4 as uuidv4 } from "uuid";
-
-type CreateInput = {
-  name: string;
-  email: string;
-  password: string;
-  role?: "PATIENT" | "SECRETARY" | "ADMIN";
-  rut?: string;
-  phone?: string;
-};
-
-type UpdateInput = Partial<CreateInput>;
 
 const userSelect = {
   id: true,
-  name: true,
+  firstName: true,
+  lastName: true,
   email: true,
   role: true,
   rut: true,
@@ -33,6 +24,9 @@ const userSelect = {
   isActive: true,
   createdAt: true,
   updatedAt: true,
+  gender: true,
+  birthDate: true,
+  address: true,
 };
 
 export const listUsers = async (page = 1, limit = 20) => {
@@ -64,14 +58,32 @@ export const getUserById = async (id: string) => {
   return prisma.user.findUnique({ where: { id }, select: userSelect });
 };
 
+type CreateInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  rut: string;
+  role?: "PATIENT" | "SECRETARY" | "ADMIN" | "DOCTOR";
+  phone?: string;
+};
+
 export const createUser = async (data: CreateInput) => {
-  const hashed = await bcrypt.hash(data.password, Number(BCRYPT_SALT_ROUNDS));
+  if (!data.rut) {
+    const e: any = new Error("RUT requerido");
+    e.code = "RUT_REQUIRED";
+    throw e;
+  }
+
+  const saltRounds = Number(BCRYPT_SALT_ROUNDS ?? 10);
+  const hashed = await bcrypt.hash(data.password, saltRounds);
 
   try {
     const user = await prisma.user.create({
       data: {
         id: uuidv4(),
-        name: data.name,
+        firstName: data.firstName,
+        lastName: data.lastName,
         email: data.email,
         password: hashed,
         role: data.role ?? "PATIENT",
@@ -80,11 +92,15 @@ export const createUser = async (data: CreateInput) => {
       },
       select: userSelect,
     });
+
     return user;
   } catch (err: any) {
+    // Normalize Prisma unique error to bubble code P2002
     if (
-      (PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === "P2002") ||
-      ((err as any)?.code === "P2002")
+      (PrismaClientKnownRequestError &&
+        err instanceof PrismaClientKnownRequestError &&
+        err.code === "P2002") ||
+      err?.code === "P2002"
     ) {
       const e: any = new Error("Email already exists");
       e.code = "P2002";
@@ -94,13 +110,13 @@ export const createUser = async (data: CreateInput) => {
   }
 };
 
+type UpdateInput = Partial<CreateInput> & { password?: string };
+
 export const updateUser = async (id: string, data: UpdateInput) => {
   const updateData: any = { ...data };
   if (data.password) {
-    updateData.password = await bcrypt.hash(
-      String(data.password),
-      Number(BCRYPT_SALT_ROUNDS),
-    );
+    const saltRounds = Number(BCRYPT_SALT_ROUNDS ?? 10);
+    updateData.password = await bcrypt.hash(String(data.password), saltRounds);
   }
 
   try {
@@ -109,15 +125,21 @@ export const updateUser = async (id: string, data: UpdateInput) => {
       data: updateData,
       select: userSelect,
     });
-
     return user;
   } catch (err: any) {
     if (
-      (PrismaClientKnownRequestError && err instanceof PrismaClientKnownRequestError && err.code === "P2002") ||
-      ((err as any)?.code === "P2002")
+      (PrismaClientKnownRequestError &&
+        err instanceof PrismaClientKnownRequestError &&
+        err.code === "P2002") ||
+      err?.code === "P2002"
     ) {
       const e: any = new Error("Email already exists");
       e.code = "P2002";
+      throw e;
+    }
+    if (err?.code === "P2025") {
+      const e: any = new Error("Record not found");
+      e.code = "P2025";
       throw e;
     }
     throw err;
@@ -133,6 +155,11 @@ export const setUserStatus = async (id: string, isActive: boolean) => {
     });
     return user;
   } catch (err: any) {
+    if (err?.code === "P2025") {
+      const e: any = new Error("Record not found");
+      e.code = "P2025";
+      throw e;
+    }
     throw err;
   }
 };
@@ -170,21 +197,27 @@ export const getAppointments = async (filters: AppointmentFilters) => {
   }
 
   if (filters.patientName) {
-    whereClause.patient = {
-      name: {
-        contains: filters.patientName,
-        mode: "insensitive",
+    whereClause.OR = [
+      {
+        patient: {
+          firstName: { contains: filters.patientName, mode: "insensitive" },
+        },
       },
-    };
+      {
+        patient: {
+          lastName: { contains: filters.patientName, mode: "insensitive" },
+        },
+      },
+    ];
   }
 
   if (filters.doctorName) {
     whereClause.doctorProfile = {
       user: {
-        name: {
-          contains: filters.doctorName,
-          mode: "insensitive",
-        },
+        OR: [
+          { firstName: { contains: filters.doctorName, mode: "insensitive" } },
+          { lastName: { contains: filters.doctorName, mode: "insensitive" } },
+        ],
       },
     };
   }
@@ -198,7 +231,8 @@ export const getAppointments = async (filters: AppointmentFilters) => {
         patient: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             email: true,
             phone: true,
             rut: true,
@@ -209,7 +243,8 @@ export const getAppointments = async (filters: AppointmentFilters) => {
             user: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                lastName: true,
               },
             },
             specialty: true,
@@ -237,7 +272,14 @@ export const findDoctorProfile = async (doctorProfileId: string) => {
   return prisma.doctorProfile.findUnique({
     where: { id: doctorProfileId },
     include: {
-      user: true,
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
       specialty: true,
     },
   });
@@ -245,7 +287,7 @@ export const findDoctorProfile = async (doctorProfileId: string) => {
 
 export const findExistingSchedule = async (
   doctorProfileId: string,
-  dayOfWeek: number,
+  dayOfWeek: number
 ) => {
   return prisma.schedule.findFirst({
     where: {
@@ -279,7 +321,8 @@ export const createSchedule = async (data: CreateScheduleInput) => {
           user: {
             select: {
               id: true,
-              name: true,
+              firstName: true,
+              lastName: true,
             },
           },
           specialty: true,
@@ -293,7 +336,7 @@ export const findConflictingAppointments = async (
   doctorProfileId: string,
   dayOfWeek: number,
   newStartTime: string,
-  newEndTime: string,
+  newEndTime: string
 ) => {
   try {
     const conflicts: any[] = await prisma.$queryRaw`
@@ -305,7 +348,6 @@ export const findConflictingAppointments = async (
         AND CAST("endTime" AS TIME) > CAST(${newStartTime} AS TIME)
       LIMIT 1;
     `;
-
     return conflicts.length > 0 ? conflicts[0] : null;
   } catch (error) {
     console.error("Error en findConflictingAppointments:", error);

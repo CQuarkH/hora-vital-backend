@@ -2,6 +2,43 @@
 import { Request, Response } from "express";
 import * as AuthService from "../services/authService";
 
+/**
+ * @swagger
+ * tags:
+ *   name: Auth
+ *   description: Registro y login
+ */
+
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Registrar un usuario
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName: { type: string }
+ *               lastName: { type: string }
+ *               email: { type: string }
+ *               password: { type: string }
+ *               rut: { type: string }
+ *               phone: { type: string }
+ *               gender: { type: string }
+ *               birthDate: { type: string, format: date }
+ *               address: { type: string }
+ *     responses:
+ *       201:
+ *         description: Usuario registrado exitosamente
+ *       409:
+ *         description: Email o RUT ya registrado
+ *       500:
+ *         description: Error de servidor
+ */
 export const register = async (req: Request, res: Response) => {
   try {
     const {
@@ -61,6 +98,29 @@ export const register = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login de usuario
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               rut: { type: string }
+ *               password: { type: string }
+ *     responses:
+ *       200:
+ *         description: Login exitoso
+ *       401:
+ *         description: Credenciales inválidas
+ *       500:
+ *         description: Error de servidor
+ */
 export const login = async (req: Request, res: Response) => {
   try {
     const { rut, password } = req.body;

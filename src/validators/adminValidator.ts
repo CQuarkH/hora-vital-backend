@@ -3,7 +3,8 @@ import { z } from "zod";
 import { Request, Response, NextFunction } from "express";
 
 export const adminCreateSchema = z.object({
-  name: z.string().min(1, "Nombre requerido"),
+  firstName: z.string().min(1, "Nombre (firstName) requerido"),
+  lastName: z.string().min(1, "Apellido (lastName) requerido"),
   email: z.email("Email inválido"),
   password: z
     .string()
@@ -20,9 +21,10 @@ export const adminCreateSchema = z.object({
 });
 
 export const adminUpdateSchema = z.object({
-  name: z.string().min(1, "Nombre requerido").optional(),
+  firstName: z.string().min(1, "Nombre requerido").optional(),
+  lastName: z.string().min(1, "Apellido requerido").optional(),
   email: z.email("Email inválido").optional(),
-  role: z.enum(["PATIENT", "SECRETARY", "ADMIN"]).optional(),
+  role: z.enum(["PATIENT", "SECRETARY", "ADMIN", "DOCTOR"]).optional(),
   rut: z.string().optional(),
   phone: z.string().optional(),
 });
@@ -41,13 +43,13 @@ export const createScheduleSchema = z.object({
     .string()
     .regex(
       /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-      "Formato de hora inválido (HH:mm)",
+      "Formato de hora inválido (HH:mm)"
     ),
   endTime: z
     .string()
     .regex(
       /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-      "Formato de hora inválido (HH:mm)",
+      "Formato de hora inválido (HH:mm)"
     ),
   slotDuration: z.number().min(15).max(120).optional(),
 });

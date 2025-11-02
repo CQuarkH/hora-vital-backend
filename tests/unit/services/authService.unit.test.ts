@@ -16,12 +16,12 @@ const mockedJwt = {
   sign: jest.fn(),
 };
 
-jest.mock("@/db/prisma", () => ({ __esModule: true, default: mockedPrisma }));
+jest.mock("../../../src/db/prisma", () => ({ __esModule: true, default: mockedPrisma }));
 jest.mock("bcrypt", () => mockedBcrypt);
 jest.mock("jsonwebtoken", () => mockedJwt);
 
 const AuthService =
-  require("@/services/authService") as typeof import("../../../src/services/authService");
+  require("../../../src/services/authService") as typeof import("../../../src/services/authService");
 
 describe("authService (unit)", () => {
   afterEach(() => {

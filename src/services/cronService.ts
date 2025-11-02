@@ -1,7 +1,20 @@
+// src/services/cronService.ts
 import cron from "node-cron";
 import prisma from "../db/prisma";
 import * as NotificationService from "./notificationService";
 import * as EmailService from "./emailService";
+
+const patientSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+};
+
+const doctorUserSelect = {
+  firstName: true,
+  lastName: true,
+};
 
 export const startReminderJobs = () => {
   cron.schedule("0 18 * * *", async () => {
@@ -25,18 +38,12 @@ export const startReminderJobs = () => {
         },
         include: {
           patient: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
+            select: patientSelect,
           },
           doctorProfile: {
             include: {
               user: {
-                select: {
-                  name: true,
-                },
+                select: doctorUserSelect,
               },
               specialty: {
                 select: {
@@ -49,25 +56,41 @@ export const startReminderJobs = () => {
       });
 
       for (const appointment of appointments) {
+        const doctorUser = appointment.doctorProfile?.user;
+        const doctorName = doctorUser
+          ? `${doctorUser.firstName ?? ""}${doctorUser.lastName ? " " + doctorUser.lastName : ""}`.trim()
+          : "";
+
         const appointmentData = {
           appointmentDate: appointment.appointmentDate
             .toISOString()
             .split("T")[0],
           startTime: appointment.startTime,
-          doctorName: appointment.doctorProfile.user.name,
-          specialty: appointment.doctorProfile.specialty.name,
+          doctorName,
+          specialty: appointment.doctorProfile?.specialty?.name ?? "",
         };
 
-        await NotificationService.createAppointmentReminder(
-          appointment.patient.id,
-          appointmentData,
-        );
-
-        if (appointment.patient.email) {
-          await EmailService.sendAppointmentReminder(
-            appointment.patient.email,
-            appointmentData,
+        try {
+          await NotificationService.createAppointmentReminder(
+            appointment.patient.id,
+            appointmentData
           );
+        } catch (err) {
+          console.error(
+            "Failed to create appointment reminder notification:",
+            err
+          );
+        }
+
+        try {
+          if (appointment.patient.email) {
+            await EmailService.sendAppointmentReminder(
+              appointment.patient.email,
+              appointmentData
+            );
+          }
+        } catch (err) {
+          console.error("Failed to send appointment reminder email:", err);
         }
       }
 

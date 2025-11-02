@@ -3,6 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import { json } from "body-parser";
+import { setupSwagger } from "./swagger";
 import authRoutes from "./routes/auth";
 import adminRoutes from "./routes/admin";
 import profileRoutes from "./routes/profile";
@@ -23,5 +24,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/users", profileRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/notifications", notificationRoutes);
+
+// Swagger
+setupSwagger(app);
 
 export default app;

@@ -5,7 +5,7 @@ import { Request, Response, NextFunction } from "express";
 export const registerSchema = z.object({
   firstName: z.string().min(1, "Nombre (firstName) requerido"),
   lastName: z.string().min(1, "Apellido (lastName) requerido"),
-  email: z.string().email("Email inválido"),
+  email: z.email("Email inválido"),
   password: z
     .string()
     .min(8, "La contraseña debe tener al menos 8 caracteres")

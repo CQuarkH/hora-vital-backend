@@ -1,14 +1,17 @@
-import * as ProfileService from "../../../src/services/profileService"
-import * as ProfileController from "../../../src/controllers/profileController"
+// tests/unit/controllers/profileController.unit.test.ts
+import * as ProfileService from "../../../src/services/profileService";
+import * as ProfileController from "../../../src/controllers/profileController";
 import { createMockResponse } from "../helpers/mockResponse";
 
-jest.mock("@/services/profileService");
+jest.mock("../../../src/services/profileService");
 
 const mockedProfileService = ProfileService as unknown as jest.Mocked<
   typeof ProfileService
 >;
 
 describe("profileController (unit)", () => {
+  afterEach(() => jest.clearAllMocks());
+
   describe("getProfile", () => {
     it("returns 401 when not authenticated", async () => {
       const req: any = { user: undefined };
@@ -38,7 +41,7 @@ describe("profileController (unit)", () => {
       const req: any = { user: { id: "1" } };
       const res = createMockResponse();
 
-      const user = { id: "1", name: "A" };
+      const user = { id: "1", firstName: "A", lastName: "B" };
       mockedProfileService.getProfile.mockResolvedValue(user as any);
 
       await ProfileController.getProfile(req, res);
@@ -113,16 +116,17 @@ describe("profileController (unit)", () => {
     });
 
     it("returns updated user on success", async () => {
-      const req: any = { user: { id: "1" }, body: { name: "B" } };
+      const req: any = { user: { id: "1" }, body: { firstName: "B" } };
       const res = createMockResponse();
 
-      const updated = { id: "1", name: "B" };
+      const updated = { id: "1", firstName: "B" };
       mockedProfileService.updateOwnProfile.mockResolvedValue(updated as any);
 
       await ProfileController.updateProfile(req, res);
 
       expect(mockedProfileService.updateOwnProfile).toHaveBeenCalledWith("1", {
-        name: "B",
+        firstName: "B",
+        lastName: undefined,
         email: undefined,
         phone: undefined,
         password: undefined,
