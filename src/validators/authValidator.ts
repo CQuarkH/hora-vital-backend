@@ -5,7 +5,7 @@ import { Request, Response, NextFunction } from "express";
 export const registerSchema = z.object({
   firstName: z.string().min(1, "Nombre (firstName) requerido"),
   lastName: z.string().min(1, "Apellido (lastName) requerido"),
-  email: z.email("Email inválido"),
+  email: z.string().email("Email inválido"),
   password: z
     .string()
     .min(8, "La contraseña debe tener al menos 8 caracteres")
@@ -34,11 +34,13 @@ export const validate =
       const e = err as any;
       if (e?.errors) {
         const messages = e.errors.map((it: any) => it.message);
-        return res.status(400).json({
-          success: false,
-          message: "Validation error",
-          errors: messages,
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Validation error",
+            errors: messages,
+          });
       }
       return res
         .status(400)
