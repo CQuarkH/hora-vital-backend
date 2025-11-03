@@ -4,9 +4,254 @@ import * as AdminService from "../services/adminService";
 
 /**
  * @swagger
+ * components:
+ *   schemas:
+ *     AdminUserCreate:
+ *       type: object
+ *       properties:
+ *         firstName:
+ *           type: string
+ *           example: "Juan"
+ *         lastName:
+ *           type: string
+ *           example: "Pérez"
+ *         email:
+ *           type: string
+ *           format: email
+ *           example: "juan@example.com"
+ *         password:
+ *           type: string
+ *           format: password
+ *           example: "S3guraP@ssw0rd"
+ *         role:
+ *           type: string
+ *           enum: ["PATIENT","SECRETARY","ADMIN","DOCTOR"]
+ *           example: "PATIENT"
+ *         rut:
+ *           type: string
+ *           example: "20.123.456-7"
+ *         phone:
+ *           type: string
+ *           example: "+56912345678"
+ *         gender:
+ *           type: string
+ *           example: "M"
+ *         birthDate:
+ *           type: string
+ *           format: date
+ *           example: "1990-01-01"
+ *         address:
+ *           type: string
+ *           example: "Calle Falsa 123"
+ *       required:
+ *         - firstName
+ *         - lastName
+ *         - email
+ *         - password
+ *         - rut
+ *
+ *     AdminUserUpdate:
+ *       type: object
+ *       properties:
+ *         firstName:
+ *           type: string
+ *           example: "Juan"
+ *         lastName:
+ *           type: string
+ *           example: "Pérez"
+ *         email:
+ *           type: string
+ *           format: email
+ *           example: "juan.new@example.com"
+ *         password:
+ *           type: string
+ *           format: password
+ *           example: "Nuev@P4ss"
+ *         role:
+ *           type: string
+ *           enum: ["PATIENT","SECRETARY","ADMIN","DOCTOR"]
+ *           example: "DOCTOR"
+ *         rut:
+ *           type: string
+ *           example: "20.123.456-7"
+ *         phone:
+ *           type: string
+ *           example: "+56987654321"
+ *         gender:
+ *           type: string
+ *           example: "F"
+ *         birthDate:
+ *           type: string
+ *           format: date
+ *           example: "1985-05-20"
+ *         address:
+ *           type: string
+ *           example: "Avenida Siempre Viva 742"
+ *
+ *     AdminUser:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           example: "uuid-v4"
+ *         firstName:
+ *           type: string
+ *         lastName:
+ *           type: string
+ *         email:
+ *           type: string
+ *           format: email
+ *         role:
+ *           type: string
+ *         rut:
+ *           type: string
+ *         phone:
+ *           type: string
+ *         gender:
+ *           type: string
+ *         birthDate:
+ *           type: string
+ *           format: date
+ *         address:
+ *           type: string
+ *         isActive:
+ *           type: boolean
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
+ *     UsersListResponse:
+ *       type: object
+ *       properties:
+ *         users:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/AdminUser'
+ *         meta:
+ *           type: object
+ *           properties:
+ *             total:
+ *               type: integer
+ *             page:
+ *               type: integer
+ *             limit:
+ *               type: integer
+ *             pages:
+ *               type: integer
+ *
+ *     CreateSchedule:
+ *       type: object
+ *       properties:
+ *         doctorProfileId:
+ *           type: string
+ *           example: "uuid-doctor-profile"
+ *         dayOfWeek:
+ *           type: integer
+ *           description: 0 = Sunday, 6 = Saturday
+ *           example: 1
+ *         startTime:
+ *           type: string
+ *           example: "09:00"
+ *         endTime:
+ *           type: string
+ *           example: "17:00"
+ *         slotDuration:
+ *           type: integer
+ *           example: 30
+ *       required:
+ *         - doctorProfileId
+ *         - dayOfWeek
+ *         - startTime
+ *         - endTime
+ *
+ *     PatchStatus:
+ *       type: object
+ *       properties:
+ *         isActive:
+ *           type: boolean
+ *       required:
+ *         - isActive
+ *
+ *     AppointmentPatientMinimal:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         firstName:
+ *           type: string
+ *         lastName:
+ *           type: string
+ *
+ *     AppointmentDoctorMinimal:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         user:
+ *           type: object
+ *           properties:
+ *             id: { type: string }
+ *             firstName: { type: string }
+ *             lastName: { type: string }
+ *
+ *     AppointmentSpecialtyMinimal:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         name:
+ *           type: string
+ *
+ *     Appointment:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         appointmentDate:
+ *           type: string
+ *           format: date-time
+ *         startTime:
+ *           type: string
+ *         endTime:
+ *           type: string
+ *         status:
+ *           type: string
+ *           enum: ["SCHEDULED","CANCELLED","COMPLETED","NO_SHOW"]
+ *         patient:
+ *           $ref: '#/components/schemas/AppointmentPatientMinimal'
+ *         doctorProfile:
+ *           $ref: '#/components/schemas/AppointmentDoctorMinimal'
+ *         specialty:
+ *           $ref: '#/components/schemas/AppointmentSpecialtyMinimal'
+ *
+ *     AppointmentsListResponse:
+ *       type: object
+ *       properties:
+ *         appointments:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Appointment'
+ *         meta:
+ *           type: object
+ *           properties:
+ *             total:
+ *               type: integer
+ *             page:
+ *               type: integer
+ *             limit:
+ *               type: integer
+ *             pages:
+ *               type: integer
+ */
+
+/**
+ * @swagger
  * tags:
- *   name: Admin
- *   description: Endpoints de administración
+ *   - name: Admin
+ *     description: Endpoints de administración
  */
 
 /**
@@ -20,13 +265,19 @@ import * as AdminService from "../services/adminService";
  *         name: page
  *         schema:
  *           type: integer
+ *         description: Página (default 1)
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *         description: Tamaño por página (default 20)
  *     responses:
  *       200:
- *         description: Lista de usuarios
+ *         description: Lista de usuarios con metadata
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UsersListResponse'
  *       500:
  *         description: Error de servidor
  */
@@ -48,21 +299,25 @@ export const listUsers = async (req: Request, res: Response) => {
  * @swagger
  * /api/admin/users:
  *   post:
- *     summary: Crear un nuevo usuario
+ *     summary: Crear un nuevo usuario (admin)
  *     tags: [Admin]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/User'
+ *             $ref: '#/components/schemas/AdminUserCreate'
  *     responses:
  *       201:
  *         description: Usuario creado exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AdminUser'
  *       409:
  *         description: Email ya registrado
  *       400:
- *         description: RUT requerido
+ *         description: RUT requerido (u otro input inválido)
  *       500:
  *         description: Error de servidor
  */
@@ -99,15 +354,20 @@ export const createUser = async (req: Request, res: Response) => {
  *         required: true
  *         schema:
  *           type: string
+ *         description: ID del usuario (UUID)
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/User'
+ *             $ref: '#/components/schemas/AdminUserUpdate'
  *     responses:
  *       200:
  *         description: Usuario actualizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AdminUser'
  *       404:
  *         description: Usuario no encontrado
  *       409:
@@ -145,18 +405,20 @@ export const updateUser = async (req: Request, res: Response) => {
  *         required: true
  *         schema:
  *           type: string
+ *         description: ID del usuario
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               isActive:
- *                 type: boolean
+ *             $ref: '#/components/schemas/PatchStatus'
  *     responses:
  *       200:
  *         description: Usuario actualizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AdminUser'
  *       404:
  *         description: Usuario no encontrado
  *       500:
@@ -215,7 +477,11 @@ export const patchStatus = async (req: Request, res: Response) => {
  *           type: string
  *     responses:
  *       200:
- *         description: Lista de citas
+ *         description: Lista de citas con metadata
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AppointmentsListResponse'
  *       500:
  *         description: Error de servidor
  */
@@ -251,18 +517,7 @@ export const getAppointments = async (req: Request, res: Response) => {
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               doctorProfileId:
- *                 type: string
- *               dayOfWeek:
- *                 type: integer
- *               startTime:
- *                 type: string
- *               endTime:
- *                 type: string
- *               slotDuration:
- *                 type: integer
+ *             $ref: '#/components/schemas/CreateSchedule'
  *     responses:
  *       201:
  *         description: Horario creado exitosamente

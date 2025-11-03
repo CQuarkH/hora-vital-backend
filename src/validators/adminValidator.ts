@@ -16,17 +16,56 @@ export const adminCreateSchema = z.object({
     .enum(["PATIENT", "SECRETARY", "ADMIN", "DOCTOR"])
     .optional()
     .default("PATIENT"),
-  rut: z.string().optional(),
+  rut: z.string().min(1, "RUT requerido"),
   phone: z.string().optional(),
+  gender: z
+    .string()
+    .optional()
+    .refine((g) => {
+      if (!g) return true;
+      return /^[A-Za-z]{1,20}$/.test(g);
+    }, "Gender inválido"),
+  birthDate: z
+    .string()
+    .optional()
+    .refine((d) => {
+      if (!d) return true;
+      const parsed = new Date(d);
+      return !isNaN(parsed.getTime());
+    }, "Fecha de nacimiento inválida"),
+  address: z.string().max(255, "Address demasiado larga").optional(),
 });
 
 export const adminUpdateSchema = z.object({
   firstName: z.string().min(1, "Nombre requerido").optional(),
   lastName: z.string().min(1, "Apellido requerido").optional(),
   email: z.email("Email inválido").optional(),
+  password: z
+    .string()
+    .min(8, "La contraseña debe tener al menos 8 caracteres")
+    .regex(/(?=.*[a-z])/, "Debe contener minúscula")
+    .regex(/(?=.*[A-Z])/, "Debe contener mayúscula")
+    .regex(/(?=.*\d)/, "Debe contener número")
+    .optional(),
   role: z.enum(["PATIENT", "SECRETARY", "ADMIN", "DOCTOR"]).optional(),
   rut: z.string().optional(),
   phone: z.string().optional(),
+  gender: z
+    .string()
+    .optional()
+    .refine((g) => {
+      if (!g) return true;
+      return /^[A-Za-z]{1,20}$/.test(g);
+    }, "Gender inválido"),
+  birthDate: z
+    .string()
+    .optional()
+    .refine((d) => {
+      if (!d) return true;
+      const parsed = new Date(d);
+      return !isNaN(parsed.getTime());
+    }, "Fecha de nacimiento inválida"),
+  address: z.string().max(255, "Address demasiado larga").optional(),
 });
 
 export const statusSchema = z.object({

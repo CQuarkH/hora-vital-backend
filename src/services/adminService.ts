@@ -66,6 +66,9 @@ type CreateInput = {
   rut: string;
   role?: "PATIENT" | "SECRETARY" | "ADMIN" | "DOCTOR";
   phone?: string;
+  gender?: string;
+  birthDate?: string | Date | null;
+  address?: string;
 };
 
 export const createUser = async (data: CreateInput) => {
@@ -79,17 +82,27 @@ export const createUser = async (data: CreateInput) => {
   const hashed = await bcrypt.hash(data.password, saltRounds);
 
   try {
+    const createData: any = {
+      id: uuidv4(),
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      password: hashed,
+      role: data.role ?? "PATIENT",
+      rut: data.rut,
+      phone: data.phone,
+      gender: data.gender,
+      address: data.address,
+    };
+    if (data.birthDate) {
+      createData.birthDate =
+        data.birthDate instanceof Date
+          ? data.birthDate
+          : new Date(String(data.birthDate));
+    }
+
     const user = await prisma.user.create({
-      data: {
-        id: uuidv4(),
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        password: hashed,
-        role: data.role ?? "PATIENT",
-        rut: data.rut,
-        phone: data.phone,
-      },
+      data: createData,
       select: userSelect,
     });
 
@@ -118,6 +131,18 @@ export const updateUser = async (id: string, data: UpdateInput) => {
     const saltRounds = Number(BCRYPT_SALT_ROUNDS ?? 10);
     updateData.password = await bcrypt.hash(String(data.password), saltRounds);
   }
+
+  if (data.birthDate) {
+    updateData.birthDate =
+      data.birthDate instanceof Date
+        ? data.birthDate
+        : new Date(String(data.birthDate));
+  }
+
+  // Remove undefined fields so Prisma doesn't attempt to set them to null unintentionally
+  Object.keys(updateData).forEach((k) => {
+    if (updateData[k] === undefined) delete updateData[k];
+  });
 
   try {
     const user = await prisma.user.update({

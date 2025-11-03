@@ -8,13 +8,12 @@ import {
 import { createMockResponse } from "../helpers/mockResponse";
 
 describe("adminValidator (unit)", () => {
-  const next = jest.fn();
-
   afterEach(() => {
     jest.clearAllMocks();
   });
 
   it("adminCreateSchema accepts valid payload", () => {
+    const next = jest.fn();
     const req: any = {
       body: {
         firstName: "Juan",
@@ -22,6 +21,7 @@ describe("adminValidator (unit)", () => {
         email: "j@t.com",
         password: "Aa123456",
         role: "PATIENT",
+        rut: "20.123.456-7",
       },
     };
     const res = createMockResponse();
@@ -31,11 +31,13 @@ describe("adminValidator (unit)", () => {
   });
 
   it("adminCreateSchema rejects missing firstName", () => {
+    const next = jest.fn();
     const req: any = {
       body: {
         lastName: "Perez",
         email: "j@t.com",
         password: "Aa123456",
+        rut: "20.123.456-7",
       },
     };
     const res = createMockResponse();
@@ -46,6 +48,7 @@ describe("adminValidator (unit)", () => {
   });
 
   it("adminUpdateSchema accepts partial update", () => {
+    const next = jest.fn();
     const req: any = { body: { email: "x@y.com" } };
     const res = createMockResponse();
     const mw = validate(adminUpdateSchema);
@@ -54,6 +57,7 @@ describe("adminValidator (unit)", () => {
   });
 
   it("statusSchema accepts boolean", () => {
+    const next = jest.fn();
     const req: any = { body: { isActive: true } };
     const res = createMockResponse();
     const mw = validate(statusSchema);
@@ -62,6 +66,7 @@ describe("adminValidator (unit)", () => {
   });
 
   it("statusSchema rejects missing isActive", () => {
+    const next = jest.fn();
     const req: any = { body: {} };
     const res = createMockResponse();
     const mw = validate(statusSchema);
