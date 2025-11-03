@@ -53,11 +53,13 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
     // Crear usuario admin
     const adminUser = await prisma.user.create({
       data: TestFactory.createPatient({
-        name: "Admin User",
+        firstName: "Admin",
+        lastName: "User",
         email: "admin@test.com",
         phone: "+56900000000",
         rut: "11111111-1",
         role: "ADMIN",
+        password: "Password123!",
       }),
     });
     adminToken = `Bearer ${generateTestToken(adminUser.id)}`;
@@ -65,11 +67,13 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
     // Crear usuario paciente
     const patientUser = await prisma.user.create({
       data: TestFactory.createPatient({
-        name: "Test Patient",
+        firstName: "Test",
+        lastName: "Patient",
         email: "patient@test.com",
         phone: "+56900000001",
         rut: "22222222-2",
         role: "PATIENT",
+        password: "Password123!",
       }),
     });
     patientUserId = patientUser.id;
@@ -78,11 +82,13 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
     // Crear usuario doctor
     const doctorUser = await prisma.user.create({
       data: TestFactory.createDoctor({
-        name: "Dr. Test Doctor",
+        firstName: "Dr.",
+        lastName: "Test Doctor",
         email: "doctor@test.com",
         phone: "+56900000002",
         rut: "33333333-3",
         role: "DOCTOR",
+        password: "Password123!",
       }),
     });
     doctorUserId = doctorUser.id;
@@ -101,22 +107,24 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
   describe("Validaciones de Autenticación", () => {
     it("debe rechazar registro con email inválido", async () => {
       const response = await request(app).post("/api/auth/register").send({
-        name: "Test User",
+        firstName: "Test",
+        lastName: "User",
         email: "email-invalido",
         password: "Password123!",
+        rut: "55555555-1", // ✅ Agregado rut
       });
 
-      console.log("Response body:", response.body);
       expect(response.status).toBe(400);
-      // The actual API might not return errors array, so let's be more flexible
       expect(response.body.message).toContain("Validation error");
     });
 
     it("debe rechazar registro con contraseña débil", async () => {
       const response = await request(app).post("/api/auth/register").send({
-        name: "Test User",
+        firstName: "Test",
+        lastName: "User",
         email: "test@test.com",
-        password: "123", // Contraseña muy corta
+        password: "123",
+        rut: "55555555-2", // ✅ Agregado rut
       });
 
       expect(response.status).toBe(400);
@@ -125,20 +133,27 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
 
     it("debe rechazar registro con email duplicado", async () => {
       // Primer registro exitoso
-      await request(app).post("/api/auth/register").send({
-        name: "First User",
-        email: "duplicate@test.com",
-        password: "Password123!",
-      });
+      await request(app)
+        .post("/api/auth/register")
+        .send({
+          firstName: "First",
+          lastName: "User",
+          email: "duplicate@test.com",
+          password: "Password123!",
+          rut: "55555555-3",
+        })
+        .expect(201);
 
-      // Segundo registro con el mismo email
+      // Segundo registro con el mismo email (RUT diferente)
       const response = await request(app).post("/api/auth/register").send({
-        name: "Second User",
+        firstName: "Second",
+        lastName: "User",
         email: "duplicate@test.com",
         password: "Password123!",
+        rut: "55555555-4",
       });
 
-      expect(response.status).toBe(409); // Conflict status
+      expect(response.status).toBe(409);
       expect(response.body.message).toContain("registrado");
     });
 
@@ -159,8 +174,8 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
         .post("/api/appointments")
         .set("Authorization", patientToken)
         .send({
-          doctorProfileId: doctorProfileId,
-          specialtyId: specialtyId,
+          doctorProfileId,
+          specialtyId,
           appointmentDate: pastDate.toISOString().split("T")[0],
           startTime: "10:00",
         });
@@ -177,10 +192,10 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
         .post("/api/appointments")
         .set("Authorization", patientToken)
         .send({
-          doctorProfileId: doctorProfileId,
-          specialtyId: specialtyId,
+          doctorProfileId,
+          specialtyId,
           appointmentDate: futureDate.toISOString().split("T")[0],
-          startTime: "25:99", // Hora inválida
+          startTime: "25:99",
         });
 
       expect(response.status).toBe(400);
@@ -190,26 +205,26 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
 
   describe("Validaciones de Perfil de Usuario", () => {
     it("debe rechazar actualización con email ya existente", async () => {
-      // Crear otro usuario
       await prisma.user.create({
         data: TestFactory.createPatient({
-          name: "Other User",
+          firstName: "Other",
+          lastName: "User",
           email: "other@test.com",
           phone: "+56900000003",
           rut: "44444444-4",
           role: "PATIENT",
+          password: "Password123!",
         }),
       });
 
-      // Intentar actualizar con email existente
       const response = await request(app)
         .put("/api/users/profile")
         .set("Authorization", patientToken)
         .send({
-          email: "other@test.com", // Email ya existe
+          email: "other@test.com",
         });
 
-      expect(response.status).toBe(409); // Conflict status
+      expect(response.status).toBe(409);
       expect(response.body.message).toContain("registrado");
     });
   });
@@ -220,7 +235,8 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
         .post("/api/admin/users")
         .set("Authorization", adminToken)
         .send({
-          name: "", // Nombre vacío
+          firstName: "",
+          lastName: "",
           email: "invalid-email",
           phone: "+56987654321",
           rut: "55555555-5",
@@ -243,16 +259,15 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
     });
 
     it("debe manejar correctamente requests con payloads grandes", async () => {
-      const largeString = "a".repeat(1000); // String de 1KB
+      const largeString = "a".repeat(1000);
 
       const response = await request(app)
         .put("/api/users/profile")
         .set("Authorization", patientToken)
         .send({
-          name: largeString,
+          firstName: largeString,
         });
 
-      // Debería aceptar o rechazar apropiadamente
       expect([200, 400, 413]).toContain(response.status);
     });
 
@@ -260,10 +275,9 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 1);
 
-      // Crear dos citas simultáneas para el mismo horario
       const appointmentData = {
-        doctorProfileId: doctorProfileId,
-        specialtyId: specialtyId,
+        doctorProfileId,
+        specialtyId,
         appointmentDate: futureDate.toISOString().split("T")[0],
         startTime: "10:00",
       };
@@ -280,11 +294,7 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
       ];
 
       const responses = await Promise.all(promises);
-
-      // Al menos una debería fallar por conflicto
-      const successCount = responses.filter(
-        (r: any) => r.status === 201,
-      ).length;
+      const successCount = responses.filter((r) => r.status === 201).length;
       expect(successCount).toBeLessThanOrEqual(1);
     });
   });
@@ -294,7 +304,6 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 1);
 
-      // Intentar agendar múltiples citas
       const appointmentPromises: any[] = [];
       for (let i = 0; i < 5; i++) {
         appointmentPromises.push(
@@ -302,20 +311,16 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
             .post("/api/appointments")
             .set("Authorization", patientToken)
             .send({
-              doctorProfileId: doctorProfileId,
-              specialtyId: specialtyId,
+              doctorProfileId,
+              specialtyId,
               appointmentDate: futureDate.toISOString().split("T")[0],
               startTime: `${9 + i}:00`,
-            }),
+            })
         );
       }
 
       const responses = await Promise.all(appointmentPromises);
-      const successfulAppointments = responses.filter(
-        (r: any) => r.status === 201,
-      );
-
-      // Debido a falta de horarios configurados, la mayoría debería fallar
+      const successfulAppointments = responses.filter((r) => r.status === 201);
       expect(successfulAppointments.length).toBeLessThan(5);
     });
 
@@ -323,15 +328,14 @@ describe("IT-10: Validación de Datos y Casos Edge", () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 1);
 
-      // Intentar agendar muy temprano en la mañana
       const response = await request(app)
         .post("/api/appointments")
         .set("Authorization", patientToken)
         .send({
-          doctorProfileId: doctorProfileId,
-          specialtyId: specialtyId,
+          doctorProfileId,
+          specialtyId,
           appointmentDate: futureDate.toISOString().split("T")[0],
-          startTime: "03:00", // Hora no disponible
+          startTime: "03:00",
         });
 
       expect(response.status).toBe(400);

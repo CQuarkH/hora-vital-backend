@@ -34,16 +34,15 @@ export const validate =
       const e = err as any;
       if (e?.errors) {
         const messages = e.errors.map((it: any) => it.message);
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Validation error",
-            errors: messages,
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Validation error",
+          errors: messages,
+        });
       }
-      return res
-        .status(400)
-        .json({ success: false, message: "Validation error" });
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+      });
     }
   };
