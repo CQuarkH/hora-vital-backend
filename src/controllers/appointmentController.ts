@@ -1,6 +1,43 @@
 import { Request, Response } from "express";
 import * as AppointmentService from "../services/appointmentService";
 
+/**
+ * @swagger
+ * tags:
+ *   name: Appointments
+ *   description: Endpoints de citas médicas
+ */
+
+/**
+ * @swagger
+ * /api/appointments:
+ *   post:
+ *     summary: Crear una nueva cita
+ *     tags: [Appointments]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               doctorProfileId: { type: string }
+ *               specialtyId: { type: string }
+ *               appointmentDate: { type: string, format: date-time }
+ *               startTime: { type: string }
+ *               notes: { type: string }
+ *     responses:
+ *       201:
+ *         description: Cita creada exitosamente
+ *       400:
+ *         description: Datos inválidos
+ *       401:
+ *         description: Usuario no autenticado
+ *       404:
+ *         description: Médico o especialidad no encontrado
+ *       409:
+ *         description: Conflicto de horario
+ */
 export const createAppointment = async (req: Request, res: Response) => {
   try {
     const { doctorProfileId, specialtyId, appointmentDate, startTime, notes } =
@@ -82,6 +119,37 @@ export const createAppointment = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/appointments/{id}:
+ *   delete:
+ *     summary: Cancelar una cita
+ *     tags: [Appointments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               cancellationReason: { type: string }
+ *     responses:
+ *       200:
+ *         description: Cita cancelada
+ *       400:
+ *         description: Ya cancelada o completada
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: No autorizado
+ *       404:
+ *         description: Cita no encontrada
+ */
 export const cancelAppointment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -128,6 +196,28 @@ export const cancelAppointment = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/appointments/me:
+ *   get:
+ *     summary: Obtener mis citas
+ *     tags: [Appointments]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Lista de citas del paciente
+ *       401:
+ *         description: Usuario no autenticado
+ */
 export const getMyAppointments = async (req: Request, res: Response) => {
   try {
     const patientId = req.user?.id;
@@ -165,6 +255,26 @@ export const getMyAppointments = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/appointments/availability:
+ *   get:
+ *     summary: Obtener horarios disponibles
+ *     tags: [Appointments]
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: specialtyId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: doctorProfileId
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Horarios disponibles
+ */
 export const getAvailability = async (req: Request, res: Response) => {
   try {
     const { date, specialtyId, doctorProfileId } = req.query;

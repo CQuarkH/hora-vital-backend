@@ -19,6 +19,20 @@ Para el "Avance 2" del proyecto, se implementó un sistema de notificaciones int
 - **Modo Test**: En entorno de pruebas (`NODE_ENV=test`), se omite el envío de emails pero se mantienen todas las notificaciones en BD
 - **Validación**: Las pruebas validan que las notificaciones se creen correctamente en la base de datos
 
+### Ejecución
+
+Para ejecutar Hora-Vital-Backend usando docker:
+
+```
+npm run docker:up
+```
+
+Para ejecutar SonarQube usando docker:
+
+```
+npm run sonar:up
+```
+
 ### Testing
 
 Para ejecutar los tests, primero es necesario instalar las dependencias con:
@@ -42,11 +56,6 @@ npm test
 Luego, los tests unitarios se ejecutan de la siguiente manera:
 
 ```
-npx jest tests/unit --verbose
+npm run test:unit
 ```
 
-Por ultimo, las pruebas unitarias con reporte de cobertura se ejecutan de la siguiente manera:
-
-```
-npx jest tests/unit --coverage --coverageDirectory=coverage-unit
-```

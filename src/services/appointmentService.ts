@@ -1,3 +1,4 @@
+// src/services/appointmentService.ts
 import prisma from "../db/prisma";
 import { AppointmentStatus } from "@prisma/client";
 import * as NotificationService from "./notificationService";
@@ -23,6 +24,21 @@ type AvailabilityFilters = {
   doctorProfileId?: string;
 };
 
+const userSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phone: true,
+};
+
+const doctorUserSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+};
+
 export const findDoctorProfile = async (doctorProfileId: string) => {
   return prisma.doctorProfile.findUnique({
     where: { id: doctorProfileId },
@@ -43,7 +59,7 @@ export const findSpecialty = async (specialtyId: string) => {
 export const checkAppointmentConflict = async (
   doctorProfileId: string,
   appointmentDate: Date,
-  startTime: string,
+  startTime: string
 ) => {
   return prisma.appointment.findFirst({
     where: {
@@ -60,7 +76,7 @@ export const checkAppointmentConflict = async (
 export const checkPatientDuplicateAppointment = async (
   patientId: string,
   doctorProfileId: string,
-  appointmentDate: Date,
+  appointmentDate: Date
 ) => {
   return prisma.appointment.findFirst({
     where: {
@@ -74,7 +90,17 @@ export const checkPatientDuplicateAppointment = async (
   });
 };
 
+const buildFullName = (user: any) => {
+  if (!user) return "";
+  if (typeof user.firstName === "string" || typeof user.lastName === "string") {
+    return `${user.firstName ?? ""}${user.lastName ? " " + user.lastName : ""}`.trim();
+  }
+  // backward compat: if tests/mocks still provide `name`
+  return (user.name as string) ?? "";
+};
+
 export const createAppointment = async (data: CreateAppointmentInput) => {
+  // compute endTime using 30 minutes duration (business rule in this file)
   const [startHour, startMinute] = data.startTime.split(":").map(Number);
   const totalMinutes = startMinute + 30;
   let endHour = startHour + Math.floor(totalMinutes / 60);
@@ -98,20 +124,12 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
     },
     include: {
       patient: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-        },
+        select: userSelect,
       },
       doctorProfile: {
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-            },
+            select: doctorUserSelect,
           },
           specialty: true,
         },
@@ -120,21 +138,25 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
     },
   });
 
-  // Send notification - this should not fail the appointment creation
+  // Send notification - should not fail appointment creation
   try {
+    const doctorName = buildFullName(appointment.doctorProfile?.user);
+    const specialtyName =
+      appointment.specialty?.name ??
+      appointment.doctorProfile?.specialty?.name ??
+      "";
     await NotificationService.createAppointmentConfirmation(data.patientId, {
       appointmentDate: data.appointmentDate.toISOString().split("T")[0],
       startTime: data.startTime,
-      doctorName: appointment.doctorProfile.user.name,
-      specialty: appointment.specialty.name,
+      doctorName,
+      specialty: specialtyName,
     });
   } catch (error) {
     console.error(
       "Failed to create appointment confirmation notification:",
-      error,
+      error
     );
-    // Continue execution - appointment was created successfully
-    // Notification failure should not prevent appointment creation
+    // swallow - appointment is already created
   }
 
   return appointment;
@@ -145,20 +167,12 @@ export const findAppointmentById = async (appointmentId: string) => {
     where: { id: appointmentId },
     include: {
       patient: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-        },
+        select: userSelect,
       },
       doctorProfile: {
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-            },
+            select: doctorUserSelect,
           },
           specialty: true,
         },
@@ -170,7 +184,7 @@ export const findAppointmentById = async (appointmentId: string) => {
 
 export const cancelAppointment = async (
   appointmentId: string,
-  cancellationReason: string,
+  cancellationReason: string
 ) => {
   const appointment = await prisma.appointment.update({
     where: { id: appointmentId },
@@ -180,20 +194,12 @@ export const cancelAppointment = async (
     },
     include: {
       patient: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-        },
+        select: userSelect,
       },
       doctorProfile: {
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-            },
+            select: doctorUserSelect,
           },
           specialty: true,
         },
@@ -202,8 +208,9 @@ export const cancelAppointment = async (
     },
   });
 
-  // Send cancellation notification - this should not fail the cancellation process
+  // Send cancellation notification
   try {
+    const doctorName = buildFullName(appointment.doctorProfile?.user);
     await NotificationService.createAppointmentCancellation(
       appointment.patientId,
       {
@@ -211,18 +218,16 @@ export const cancelAppointment = async (
           .toISOString()
           .split("T")[0],
         startTime: appointment.startTime,
-        doctorName: appointment.doctorProfile.user.name,
-        specialty: appointment.specialty.name,
+        doctorName,
+        specialty: appointment.specialty?.name ?? "",
         reason: cancellationReason,
-      },
+      }
     );
   } catch (error) {
     console.error(
       "Failed to create appointment cancellation notification:",
-      error,
+      error
     );
-    // Continue execution - appointment was cancelled successfully
-    // Notification failure should not prevent appointment cancellation
   }
 
   return appointment;
@@ -230,7 +235,7 @@ export const cancelAppointment = async (
 
 export const findPatientAppointments = async (
   patientId: string,
-  filters: AppointmentFilters = {},
+  filters: AppointmentFilters = {}
 ) => {
   const whereClause: any = {
     patientId,
@@ -256,10 +261,7 @@ export const findPatientAppointments = async (
       doctorProfile: {
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-            },
+            select: doctorUserSelect,
           },
           specialty: true,
         },
@@ -273,7 +275,7 @@ export const findPatientAppointments = async (
 export const validateDoctorSchedule = async (
   doctorProfileId: string,
   appointmentDate: Date,
-  startTime: string,
+  startTime: string
 ) => {
   const doctorProfile = await prisma.doctorProfile.findUnique({
     where: { id: doctorProfileId },
@@ -291,8 +293,8 @@ export const validateDoctorSchedule = async (
   }
 
   const dayOfWeek = appointmentDate.getDay();
-  const schedule = doctorProfile.schedules.find(
-    (s) => s.dayOfWeek === dayOfWeek,
+  const schedule = (doctorProfile as any).schedules?.find(
+    (s: any) => s.dayOfWeek === dayOfWeek
   );
 
   if (!schedule) {
@@ -337,7 +339,7 @@ export const validateDoctorSchedule = async (
 };
 
 export const getAvailableTimeSlots = async (
-  filters: AvailabilityFilters = {},
+  filters: AvailabilityFilters = {}
 ) => {
   const whereClause: any = {
     isActive: true,
@@ -355,10 +357,7 @@ export const getAvailableTimeSlots = async (
     where: whereClause,
     include: {
       user: {
-        select: {
-          id: true,
-          name: true,
-        },
+        select: doctorUserSelect,
       },
       specialty: true,
       schedules: {
@@ -369,18 +368,20 @@ export const getAvailableTimeSlots = async (
     },
   });
 
-  const availableSlots = [];
+  const availableSlots: any[] = [];
   const targetDate = filters.date || new Date();
   const dayOfWeek = targetDate.getDay();
 
   for (const doctor of doctorProfiles) {
-    const schedule = doctor.schedules.find((s) => s.dayOfWeek === dayOfWeek);
+    const schedule = (doctor as any).schedules?.find(
+      (s: any) => s.dayOfWeek === dayOfWeek
+    );
     if (!schedule) continue;
 
-    const startHour = parseInt(schedule.startTime.split(":")[0]);
-    const startMinute = parseInt(schedule.startTime.split(":")[1]);
-    const endHour = parseInt(schedule.endTime.split(":")[0]);
-    const endMinute = parseInt(schedule.endTime.split(":")[1]);
+    const startHour = parseInt(schedule.startTime.split(":")[0], 10);
+    const startMinute = parseInt(schedule.startTime.split(":")[1], 10);
+    const endHour = parseInt(schedule.endTime.split(":")[0], 10);
+    const endMinute = parseInt(schedule.endTime.split(":")[1], 10);
 
     const bookedAppointments = await prisma.appointment.findMany({
       where: {
@@ -415,7 +416,7 @@ export const getAvailableTimeSlots = async (
         availableSlots.push({
           doctorProfile: {
             id: doctor.id,
-            name: doctor.user.name,
+            name: buildFullName(doctor.user),
             specialty: doctor.specialty.name,
           },
           date: targetDate.toISOString().split("T")[0],

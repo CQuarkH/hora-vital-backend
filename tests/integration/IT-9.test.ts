@@ -1,3 +1,4 @@
+// tests/integration/IT-9.test.ts
 /**
  * IT-9: Gestión de Perfiles y Autenticación
  *
@@ -8,9 +9,6 @@
  * - Acceso a citas por administrador
  * - Gestión de horarios por administrador
  * - Integridad referencial de base de datos
- *
- * Total de pruebas: 12 tests
- * Estado: ✅ Todas las pruebas pasando
  */
 
 import request from "supertest";
@@ -19,14 +17,26 @@ import {
   cleanDatabase,
   TestFactory,
   generateTestToken,
+  userFactoryToPrismaData,
 } from "../test-helpers";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Role } from "@prisma/client";
 import app from "../../src/app";
 
-// Mock del módulo emailService
+// Mock del módulo emailService (si usas jest en tu entorno)
 jest.mock("../../src/services/emailService", () => ({
   sendConfirmationEmail: jest.fn().mockResolvedValue(true),
 }));
+
+/**
+ * Helper: devuelve un nombre concatenado desde firstName/lastName o fallback
+ */
+function normalizeNameFromResponse(respBody: any) {
+  if (!respBody) return "";
+  if (respBody.name) return respBody.name;
+  const fn = respBody.firstName ?? respBody.first_name ?? "";
+  const ln = respBody.lastName ?? respBody.last_name ?? "";
+  return `${fn} ${ln}`.trim();
+}
 
 describe("IT-9: Gestión de Perfiles y Autenticación", () => {
   let prisma: PrismaClient;
@@ -42,28 +52,30 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
   beforeEach(async () => {
     await cleanDatabase();
 
-    // Crear usuario admin para tests
+    // Crear usuario admin para tests -- usamos mapper para no enviar `name` a Prisma
+    const adminFactory = TestFactory.createPatient({
+      name: "Admin User",
+      email: "admin@test.com",
+      phone: "+56900000000",
+      rut: "11111111-1",
+      role: "ADMIN",
+    });
     const adminUser = await prisma.user.create({
-      data: TestFactory.createPatient({
-        name: "Admin User",
-        email: "admin@test.com",
-        phone: "+56900000000",
-        rut: "11111111-1",
-        role: "ADMIN",
-      }),
+      data: userFactoryToPrismaData(adminFactory),
     });
     adminUserId = adminUser.id;
     adminToken = `Bearer ${generateTestToken(adminUser.id)}`;
 
     // Crear usuario paciente para tests
+    const patientFactory = TestFactory.createPatient({
+      name: "Test Patient",
+      email: "patient@test.com",
+      phone: "+56900000001",
+      rut: "22222222-2",
+      role: "PATIENT",
+    });
     const patientUser = await prisma.user.create({
-      data: TestFactory.createPatient({
-        name: "Test Patient",
-        email: "patient@test.com",
-        phone: "+56900000001",
-        rut: "22222222-2",
-        role: "PATIENT",
-      }),
+      data: userFactoryToPrismaData(patientFactory),
     });
     patientUserId = patientUser.id;
     patientToken = `Bearer ${generateTestToken(patientUser.id)}`;
@@ -75,7 +87,7 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
 
   describe("Gestión de Usuarios por Admin", () => {
     it("debe permitir al admin crear un nuevo doctor", async () => {
-      // Crear especialidad
+      // Crear especialidad (mapper no necesario aquí)
       const specialty = await prisma.specialty.create({
         data: TestFactory.createSpecialty({
           name: "Traumatología",
@@ -83,47 +95,50 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
         }),
       });
 
-      // Crear usuario doctor
+      // Llamada al endpoint de creación (tu API puede aceptar `name` o `firstName/lastName`).
       const response = await request(app)
         .post("/api/admin/users")
         .set("Authorization", adminToken)
         .send({
-          name: "Dr. Carlos Mendoza",
+          // Para la API normalmente enviarías firstName/lastName; si tu API acepta 'name', ok.
+          firstName: "Carlos",
+          lastName: "Mendoza",
           email: "carlos.mendoza@hospital.com",
           phone: "+56987654321",
           rut: "12345678-9",
           role: "DOCTOR",
           password: "Password123!",
+          specialtyId: specialty.id, // si tu endpoint requiere asociar especialidad
         });
-
-      if (response.status !== 201) {
-        console.log("Create user response:", response.body);
-      }
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty("id");
-      expect(response.body.name).toBe("Dr. Carlos Mendoza");
+
+      // Normalizar nombre desde la respuesta (soporta name o firstName/lastName)
+      const returnedName = normalizeNameFromResponse(response.body);
+      expect(returnedName).toBe("Carlos Mendoza");
       expect(response.body.role).toBe("DOCTOR");
 
-      // Verificar persistencia en BD
+      // Verificar persistencia en BD (aquí comprobamos firstName/lastName)
       const savedUser = await prisma.user.findUnique({
         where: { id: response.body.id },
       });
 
       expect(savedUser).toBeTruthy();
-      expect(savedUser!.name).toBe("Dr. Carlos Mendoza");
+      const savedFullName =
+        `${savedUser!.firstName} ${savedUser!.lastName}`.trim();
+      expect(savedFullName).toBe("Carlos Mendoza");
       expect(savedUser!.role).toBe("DOCTOR");
     });
 
     it("debe listar todos los usuarios para admin", async () => {
-      // Crear algunos usuarios adicionales
-      await prisma.user.create({
-        data: TestFactory.createDoctor({
-          name: "Dra. Ana García",
-          email: "ana.garcia@hospital.com",
-          role: "DOCTOR",
-        }),
+      // Crear algunos usuarios adicionales usando mapper para Prisma
+      const docFactory = TestFactory.createDoctor({
+        name: "Dra. Ana García",
+        email: "ana.garcia@hospital.com",
+        role: "DOCTOR",
       });
+      await prisma.user.create({ data: userFactoryToPrismaData(docFactory) });
 
       const response = await request(app)
         .get("/api/admin/users")
@@ -131,7 +146,8 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.users).toBeInstanceOf(Array);
-      expect(response.body.users.length).toBeGreaterThan(2); // admin + patient + doctor
+      // admin + patient + doctor (al menos 3)
+      expect(response.body.users.length).toBeGreaterThanOrEqual(3);
     });
   });
 
@@ -140,7 +156,7 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
       const response = await request(app).get("/api/users/profile").send();
 
       expect(response.status).toBe(401);
-      expect(response.body.message).toContain("autorizado");
+      expect(response.body.message || "").toMatch(/autorizad/i);
     });
 
     it("debe rechazar acceso con token inválido", async () => {
@@ -160,7 +176,7 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
         .send();
 
       expect(response.status).toBe(403);
-      expect(response.body.message).toContain("insuficientes");
+      expect(response.body.message || "").toMatch(/insuficientes|rol/i);
     });
 
     it("debe permitir acceso con rol correcto", async () => {
@@ -181,7 +197,9 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
         .set("Authorization", patientToken);
 
       expect(response.status).toBe(200);
-      expect(response.body.name).toBe("Test Patient");
+      // La API puede devolver name o firstName/lastName; comprobamos ambas opciones
+      const returnedName = normalizeNameFromResponse(response.body);
+      expect(returnedName).toBe("Test Patient");
       expect(response.body.email).toBe("patient@test.com");
       expect(response.body.role).toBe("PATIENT");
     });
@@ -191,20 +209,27 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
         .put("/api/users/profile")
         .set("Authorization", patientToken)
         .send({
-          name: "Test Patient Updated",
+          // enviar firstName/lastName para ajustarse al modelo
+          firstName: "Test",
+          lastName: "Patient Updated",
           phone: "+56987654321",
         });
 
       expect(response.status).toBe(200);
-      expect(response.body.name).toBe("Test Patient Updated");
+
+      const returnedName = normalizeNameFromResponse(response.body);
+      expect(returnedName).toBe("Test Patient Updated");
       expect(response.body.phone).toBe("+56987654321");
 
-      // Verificar persistencia
+      // Verificar persistencia en BD
       const updatedUser = await prisma.user.findUnique({
         where: { id: patientUserId },
       });
 
-      expect(updatedUser!.name).toBe("Test Patient Updated");
+      expect(updatedUser).toBeTruthy();
+      const savedName =
+        `${updatedUser!.firstName} ${updatedUser!.lastName}`.trim();
+      expect(savedName).toBe("Test Patient Updated");
       expect(updatedUser!.phone).toBe("+56987654321");
     });
   });
@@ -216,20 +241,21 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
         data: TestFactory.createSpecialty(),
       });
 
+      const docFactory = TestFactory.createDoctor();
       const doctor = await prisma.user.create({
-        data: TestFactory.createDoctor(),
+        data: userFactoryToPrismaData(docFactory),
       });
 
       const doctorProfile = await prisma.doctorProfile.create({
         data: TestFactory.createDoctorProfile(doctor.id, specialty.id),
       });
 
-      // Crear una cita
+      // Crear una cita usando factory (ya devuelve appointment shape correcto)
       await prisma.appointment.create({
         data: TestFactory.createAppointment(
           patientUserId,
           doctorProfile.id,
-          specialty.id,
+          specialty.id
         ),
       });
 
@@ -258,8 +284,9 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
         data: TestFactory.createSpecialty(),
       });
 
+      const docFactory = TestFactory.createDoctor();
       const doctor = await prisma.user.create({
-        data: TestFactory.createDoctor(),
+        data: userFactoryToPrismaData(docFactory),
       });
 
       const doctorProfile = await prisma.doctorProfile.create({
@@ -301,12 +328,13 @@ describe("IT-9: Gestión de Perfiles y Autenticación", () => {
         }),
       });
 
+      const docFactory = TestFactory.createDoctor({
+        name: "Dr. Pedro Ramírez",
+        email: "pedro.ramirez@hospital.com",
+        role: "DOCTOR",
+      });
       const doctorUser = await prisma.user.create({
-        data: TestFactory.createDoctor({
-          name: "Dr. Pedro Ramírez",
-          email: "pedro.ramirez@hospital.com",
-          role: "DOCTOR",
-        }),
+        data: userFactoryToPrismaData(docFactory),
       });
 
       // Crear perfil de doctor

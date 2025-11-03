@@ -1,18 +1,32 @@
-// src/validators/profileValidator.ts
 import { z } from "zod";
 import { Request, Response, NextFunction } from "express";
 
 export const profileUpdateSchema = z.object({
-  name: z.string().min(1, "Nombre requerido").optional(),
-  email: z.email("Email inválido").optional(),
+  firstName: z.string().min(1, "Nombre requerido").optional(),
+  lastName: z.string().min(1, "Apellido requerido").optional(),
+  email: z.string().email("Email inválido").optional(),
   phone: z.string().optional(),
+  password: z
+    .string()
+    .min(8, "La contraseña debe tener al menos 8 caracteres")
+    .regex(/(?=.*[a-z])/, "Debe contener minúscula")
+    .regex(/(?=.*[A-Z])/, "Debe contener mayúscula")
+    .regex(/(?=.*\d)/, "Debe contener número")
+    .optional(),
+  gender: z
+    .string()
+    .optional()
+    .refine((g) => {
+      if (!g) return true;
+      return /^[A-Za-z]{1,20}$/.test(g);
+    }, "Gender inválido"),
+  address: z.string().max(255, "Address demasiado larga").optional(),
 });
 
 export const validate =
   (schema: z.ZodTypeAny) =>
   (req: Request, res: Response, next: NextFunction) => {
     try {
-      // permitimos body parcial
       schema.parse(req.body);
       return next();
     } catch (err) {
@@ -25,4 +39,4 @@ export const validate =
       }
       return res.status(400).json({ message: "Validation error" });
     }
-};
+  };

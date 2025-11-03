@@ -1,13 +1,14 @@
+// tests/unit/services/appointmentService.unit.test.ts
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
-import * as AppointmentService from "../../src/services/appointmentService";
-import * as NotificationService from "../../src/services/notificationService";
-import prisma from "../../src/db/prisma";
+import * as AppointmentService from "../../../src/services/appointmentService";
+import * as NotificationService from "../../../src/services/notificationService";
+import prisma from "../../../src/db/prisma";
 
-// Mock dependencies
-jest.mock("../../src/services/notificationService");
-jest.mock("../../src/db/prisma", () => ({
+jest.mock("../../../src/services/notificationService");
+jest.mock("../../../src/db/prisma", () => ({
   doctorProfile: {
     findUnique: jest.fn(),
+    findMany: jest.fn(),
   },
   specialty: {
     findUnique: jest.fn(),
@@ -42,7 +43,7 @@ describe("AppointmentService", () => {
         specialtyId: "specialty-1",
         licenseNumber: "12345",
         specialty: { id: "specialty-1", name: "Cardiología" },
-        user: { id: "user-1", name: "Dr. Test" },
+        user: { id: "user-1", firstName: "Dr.", lastName: "Test" },
         schedules: [],
       };
 
@@ -112,7 +113,7 @@ describe("AppointmentService", () => {
       const result = await AppointmentService.checkAppointmentConflict(
         "doctor-1",
         new Date("2025-12-01"),
-        "10:00",
+        "10:00"
       );
 
       expect(result).toEqual(mockAppointment);
@@ -134,7 +135,7 @@ describe("AppointmentService", () => {
       const result = await AppointmentService.checkAppointmentConflict(
         "doctor-1",
         new Date("2025-12-01"),
-        "10:00",
+        "10:00"
       );
 
       expect(result).toBeNull();
@@ -156,7 +157,7 @@ describe("AppointmentService", () => {
       const result = await AppointmentService.checkPatientDuplicateAppointment(
         "patient-1",
         "doctor-1",
-        new Date("2025-12-01"),
+        new Date("2025-12-01")
       );
 
       expect(result).toEqual(mockAppointment);
@@ -168,7 +169,7 @@ describe("AppointmentService", () => {
       const result = await AppointmentService.checkPatientDuplicateAppointment(
         "patient-1",
         "doctor-1",
-        new Date("2025-12-01"),
+        new Date("2025-12-01")
       );
 
       expect(result).toBeNull();
@@ -193,7 +194,8 @@ describe("AppointmentService", () => {
         status: "SCHEDULED",
         patient: {
           id: "patient-1",
-          name: "Patient Test",
+          firstName: "Patient",
+          lastName: "Test",
           email: "patient@test.com",
           phone: "123456789",
         },
@@ -201,7 +203,8 @@ describe("AppointmentService", () => {
           id: "doctor-1",
           user: {
             id: "user-1",
-            name: "Dr. Test",
+            firstName: "Dr.",
+            lastName: "Test",
           },
           specialty: {
             id: "specialty-1",
@@ -216,7 +219,7 @@ describe("AppointmentService", () => {
 
       mockPrisma.appointment.create.mockResolvedValue(mockCreatedAppointment);
       mockNotificationService.createAppointmentConfirmation.mockResolvedValue(
-        {},
+        {}
       );
 
       const result =
@@ -236,7 +239,7 @@ describe("AppointmentService", () => {
         include: expect.any(Object),
       });
       expect(
-        mockNotificationService.createAppointmentConfirmation,
+        mockNotificationService.createAppointmentConfirmation
       ).toHaveBeenCalledWith("patient-1", {
         appointmentDate: "2025-12-01",
         startTime: "10:00",
@@ -262,13 +265,14 @@ describe("AppointmentService", () => {
         status: "SCHEDULED",
         patient: {
           id: "patient-1",
-          name: "Patient Test",
+          firstName: "Patient",
+          lastName: "Test",
           email: "patient@test.com",
           phone: "123456789",
         },
         doctorProfile: {
           id: "doctor-1",
-          user: { id: "user-1", name: "Dr. Test" },
+          user: { id: "user-1", firstName: "Dr.", lastName: "Test" },
           specialty: { id: "specialty-1", name: "Cardiología" },
         },
         specialty: { id: "specialty-1", name: "Cardiología" },
@@ -276,7 +280,7 @@ describe("AppointmentService", () => {
 
       mockPrisma.appointment.create.mockResolvedValue(mockCreatedAppointment);
       mockNotificationService.createAppointmentConfirmation.mockResolvedValue(
-        {},
+        {}
       );
 
       await AppointmentService.createAppointment(appointmentData);
@@ -302,7 +306,7 @@ describe("AppointmentService", () => {
       const result = await AppointmentService.validateDoctorSchedule(
         "nonexistent",
         new Date("2025-12-01"),
-        "10:00",
+        "10:00"
       );
 
       expect(result).toEqual({
@@ -324,7 +328,7 @@ describe("AppointmentService", () => {
       const result = await AppointmentService.validateDoctorSchedule(
         "doctor-1",
         mondayDate,
-        "10:00",
+        "10:00"
       );
 
       expect(result).toEqual({
@@ -339,7 +343,7 @@ describe("AppointmentService", () => {
         schedules: [
           {
             id: "schedule-1",
-            dayOfWeek: 1,
+            dayOfWeek: 2, // choose a day
             startTime: "09:00",
             endTime: "17:00",
             slotDuration: 30,
@@ -350,12 +354,11 @@ describe("AppointmentService", () => {
 
       mockPrisma.doctorProfile.findUnique.mockResolvedValue(mockDoctorProfile);
 
-      const mondayDate = new Date("2025-12-02");
-
+      const date = new Date("2025-12-03"); // day 3
       const result = await AppointmentService.validateDoctorSchedule(
         "doctor-1",
-        mondayDate,
-        "18:00",
+        date,
+        "18:00"
       );
 
       expect(result).toEqual({
@@ -370,7 +373,7 @@ describe("AppointmentService", () => {
         schedules: [
           {
             id: "schedule-1",
-            dayOfWeek: 1,
+            dayOfWeek: 2,
             startTime: "09:00",
             endTime: "17:00",
             slotDuration: 30,
@@ -381,12 +384,11 @@ describe("AppointmentService", () => {
 
       mockPrisma.doctorProfile.findUnique.mockResolvedValue(mockDoctorProfile);
 
-      const mondayDate = new Date("2025-12-02");
-
+      const date = new Date("2025-12-03");
       const result = await AppointmentService.validateDoctorSchedule(
         "doctor-1",
-        mondayDate,
-        "09:15",
+        date,
+        "09:15"
       );
 
       expect(result).toEqual({
@@ -401,7 +403,7 @@ describe("AppointmentService", () => {
         schedules: [
           {
             id: "schedule-1",
-            dayOfWeek: 1,
+            dayOfWeek: 2,
             startTime: "09:00",
             endTime: "17:00",
             slotDuration: 30,
@@ -412,12 +414,11 @@ describe("AppointmentService", () => {
 
       mockPrisma.doctorProfile.findUnique.mockResolvedValue(mockDoctorProfile);
 
-      const mondayDate = new Date("2025-12-02");
-
+      const date = new Date("2025-12-03");
       const result = await AppointmentService.validateDoctorSchedule(
         "doctor-1",
-        mondayDate,
-        "10:30",
+        date,
+        "10:30"
       );
 
       expect(result).toEqual({
@@ -438,13 +439,14 @@ describe("AppointmentService", () => {
         startTime: "10:00",
         patient: {
           id: "patient-1",
-          name: "Patient Test",
+          firstName: "Patient",
+          lastName: "Test",
           email: "patient@test.com",
           phone: "123456789",
         },
         doctorProfile: {
           id: "doctor-1",
-          user: { id: "user-1", name: "Dr. Test" },
+          user: { id: "user-1", firstName: "Dr.", lastName: "Test" },
           specialty: { id: "specialty-1", name: "Cardiología" },
         },
         specialty: { id: "specialty-1", name: "Cardiología" },
@@ -452,12 +454,12 @@ describe("AppointmentService", () => {
 
       mockPrisma.appointment.update.mockResolvedValue(mockCancelledAppointment);
       mockNotificationService.createAppointmentCancellation.mockResolvedValue(
-        {},
+        {}
       );
 
       const result = await AppointmentService.cancelAppointment(
         "appointment-1",
-        "Personal reasons",
+        "Personal reasons"
       );
 
       expect(result).toEqual(mockCancelledAppointment);
@@ -470,7 +472,7 @@ describe("AppointmentService", () => {
         include: expect.any(Object),
       });
       expect(
-        mockNotificationService.createAppointmentCancellation,
+        mockNotificationService.createAppointmentCancellation
       ).toHaveBeenCalledWith("patient-1", {
         appointmentDate: "2025-12-01",
         startTime: "10:00",
@@ -492,7 +494,7 @@ describe("AppointmentService", () => {
           status: "SCHEDULED",
           doctorProfile: {
             id: "doctor-1",
-            user: { id: "user-1", name: "Dr. Test" },
+            user: { id: "user-1", firstName: "Dr.", lastName: "Test" },
             specialty: { id: "specialty-1", name: "Cardiología" },
           },
           specialty: { id: "specialty-1", name: "Cardiología" },
@@ -509,7 +511,7 @@ describe("AppointmentService", () => {
 
       const result = await AppointmentService.findPatientAppointments(
         "patient-1",
-        filters,
+        filters
       );
 
       expect(result).toEqual(mockAppointments);

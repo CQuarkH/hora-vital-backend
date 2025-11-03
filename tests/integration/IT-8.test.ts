@@ -1,34 +1,42 @@
-import request from 'supertest';
-import { getPrismaClient, generateTestToken } from '../test-helpers';
-import { PrismaClient } from '@prisma/client';
+// tests/integration/IT-8.test.ts
+import request from "supertest";
+import { getPrismaClient, generateTestToken } from "../test-helpers";
+import { PrismaClient, Role, AppointmentStatus } from "@prisma/client";
 
-// Función auxiliar
+/**
+ * IT-8: Gestionar Agenda con Solapamiento (Error)
+ */
+
 const getTestDoctorIdAndToken = async (prisma: PrismaClient) => {
   const specialty = await prisma.specialty.upsert({
-    where: { name: 'Cardiología Test' },
+    where: { name: "Cardiología Test" },
     update: {},
-    create: { name: 'Cardiología Test' },
+    create: { name: "Cardiología Test" },
   });
+
   const user = await prisma.user.upsert({
-    where: { email: 'doctor-it8-admin@test.com' },
+    where: { email: "doctor-it8-admin@test.com" },
     update: {},
     create: {
-      email: 'doctor-it8-admin@test.com',
-      password: 'hash-password-test',
-      name: 'Dr. Admin 8',
-      rut: '1-8',
-      role: 'ADMIN',
+      email: "doctor-it8-admin@test.com",
+      password: "hash-password-test", // si quieres hash real, aplicar bcrypt aquí
+      firstName: "Dr.",
+      lastName: "Admin 8",
+      rut: "1-8",
+      role: Role.ADMIN,
     },
   });
+
   const doctor = await prisma.doctorProfile.upsert({
     where: { userId: user.id },
     update: {},
     create: {
       userId: user.id,
       specialtyId: specialty.id,
-      licenseNumber: 'TEST-54321',
+      licenseNumber: "TEST-54321",
     },
   });
+
   const token = generateTestToken(user.id);
   return {
     doctorId: doctor.id,
@@ -38,10 +46,7 @@ const getTestDoctorIdAndToken = async (prisma: PrismaClient) => {
   };
 };
 
-/**
- * IT-8: Gestionar Agenda con Solapamiento (Error)
- */
-describe('IT-8 - Gestionar Agenda con Solapamiento (Error)', () => {
+describe("IT-8 - Gestionar Agenda con Solapamiento (Error)", () => {
   let prisma: PrismaClient;
   let app: any;
   let doctorId: string;
@@ -49,24 +54,25 @@ describe('IT-8 - Gestionar Agenda con Solapamiento (Error)', () => {
   let specialtyId: string;
 
   // 1. Datos de Conflicto
-  const targetDate = '2026-01-11';
-  const targetDateObject = new Date(targetDate);
+  const targetDate = "2026-01-11"; // YYYY-MM-DD
+  // usar fecha en UTC para persistencia; Prisma acepta Date object
+  const targetDateObject = new Date(targetDate + "T00:00:00.000Z");
   const targetDayOfWeek = targetDateObject.getUTCDay();
 
   const existingAppointment = {
-    startTime: '10:00',
-    endTime: '11:00',
+    startTime: "10:00",
+    endTime: "11:00",
   };
-  
+
   const recurringOverlappingSchedule = {
     dayOfWeek: targetDayOfWeek,
-    startTime: '10:30',
-    endTime: '11:30',
+    startTime: "10:30",
+    endTime: "11:30",
   };
 
   beforeAll(async () => {
     prisma = getPrismaClient();
-    const appModule = await import('../../src/app');
+    const appModule = await import("../../src/app");
     app = appModule.default || (appModule as any).app;
 
     const data = await getTestDoctorIdAndToken(prisma);
@@ -74,27 +80,34 @@ describe('IT-8 - Gestionar Agenda con Solapamiento (Error)', () => {
     tokenAdmin = data.token;
     specialtyId = data.specialtyId;
 
-    // Precondición 1: Limpieza
+    // Precondición 1: Limpieza de citas y horarios del día
     await prisma.appointment.deleteMany({
-      where: { doctorProfileId: doctorId, appointmentDate: targetDateObject },
+      where: {
+        doctorProfileId: doctorId,
+        appointmentDate: targetDateObject,
+      },
     });
     await prisma.schedule.deleteMany({
-      where: { doctorProfileId: doctorId, dayOfWeek: targetDayOfWeek },
+      where: {
+        doctorProfileId: doctorId,
+        dayOfWeek: targetDayOfWeek,
+      },
     });
 
-    // Precondición 2: Crear paciente
+    // Precondición 2: Crear paciente (usar firstName/lastName)
     const patientUser = await prisma.user.upsert({
-      where: { email: 'paciente-it8@test.com' },
+      where: { email: "paciente-it8@test.com" },
       update: {},
       create: {
-        email: 'paciente-it8@test.com',
-        password: 'hash-password-test',
-        name: 'Paciente de Prueba IT-8',
-        rut: '1-7',
-        role: 'PATIENT',
-      }
+        email: "paciente-it8@test.com",
+        password: "hash-password-test",
+        firstName: "Paciente",
+        lastName: "IT-8",
+        rut: "1-7",
+        role: Role.PATIENT,
+      },
     });
-    
+
     // Precondición 3: Crear la CITA existente que generará el conflicto
     await prisma.appointment.create({
       data: {
@@ -103,34 +116,48 @@ describe('IT-8 - Gestionar Agenda con Solapamiento (Error)', () => {
         specialtyId: specialtyId,
         appointmentDate: targetDateObject,
         startTime: existingAppointment.startTime, // "10:00"
-        endTime: existingAppointment.endTime,   // "11:00"
-        status: 'SCHEDULED',
+        endTime: existingAppointment.endTime, // "11:00"
+        status: AppointmentStatus.SCHEDULED,
       },
     });
   });
 
-  it('debería rechazar la creación del horario con Error HTTP 409 (Conflict)', async () => {
-    
+  afterAll(async () => {
+    // limpieza opcional: borrar citas y horarios creados por el test
+    try {
+      await prisma.appointment.deleteMany({
+        where: { doctorProfileId: doctorId, appointmentDate: targetDateObject },
+      });
+      await prisma.schedule.deleteMany({
+        where: { doctorProfileId: doctorId, dayOfWeek: targetDayOfWeek },
+      });
+    } catch (e) {
+      // ignore
+    }
+    await prisma.$disconnect();
+  });
+
+  it("debería rechazar la creación del horario con Error HTTP 409 (Conflict)", async () => {
     const payload = {
       doctorProfileId: doctorId,
       dayOfWeek: recurringOverlappingSchedule.dayOfWeek,
       startTime: recurringOverlappingSchedule.startTime, // "10:30"
-      endTime: recurringOverlappingSchedule.endTime,   // "11:30"
+      endTime: recurringOverlappingSchedule.endTime, // "11:30"
       slotDuration: 30,
     };
 
     // 2. Acción: Intentar crear el horario que se solapa
     const response = await request(app)
-      .post('/api/admin/schedules')
-      .set('Authorization', tokenAdmin) 
+      .post("/api/admin/schedules")
+      .set("Authorization", tokenAdmin)
       .send(payload)
       // 3. Resultado Esperado (API): Status Conflict (409)
       .expect(409);
 
     // 4. Verificación API: Debe haber un mensaje de error
-    expect(response.body).toHaveProperty('message');
+    expect(response.body).toHaveProperty("message");
 
-    // 5. Verificación Persistencia: Asegurar que NO se creó ningún horario
+    // 5. Verificación Persistencia: Asegurar que NO se creó ningún horario para ese día
     const schedules = await prisma.schedule.findMany({
       where: {
         doctorProfileId: doctorId,
