@@ -1,4 +1,3 @@
-// src/controllers/profileController.ts
 import { Request, Response } from "express";
 import * as ProfileService from "../services/profileService";
 
@@ -51,14 +50,26 @@ export const getProfile = async (req: Request, res: Response) => {
  *           schema:
  *             type: object
  *             properties:
- *               firstName: { type: string }
- *               lastName: { type: string }
- *               email: { type: string }
- *               phone: { type: string }
- *               password: { type: string }
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *                 description: Gender del usuario (ej: M, F, NB, etc.)
+ *               address:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Perfil actualizado
+ *       401:
+ *         description: No autorizado
  *       403:
  *         description: No autorizado para actualizar otro usuario
  *       404:
@@ -79,7 +90,8 @@ export const updateProfile = async (req: Request, res: Response) => {
         .json({ message: "No puedes editar el perfil de otro usuario" });
     }
 
-    const { firstName, lastName, email, phone, password } = req.body;
+    const { firstName, lastName, email, phone, password, gender, address } =
+      req.body;
 
     const updated = await ProfileService.updateOwnProfile(userId, {
       firstName,
@@ -87,6 +99,8 @@ export const updateProfile = async (req: Request, res: Response) => {
       email,
       phone,
       password,
+      gender,
+      address
     });
 
     return res.json(updated);

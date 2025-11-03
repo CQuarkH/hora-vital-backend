@@ -4,7 +4,6 @@ import bcrypt from "bcrypt";
 import { BCRYPT_SALT_ROUNDS } from "../config";
 import { Prisma } from "@prisma/client";
 
-
 let PrismaClientKnownRequestError: any;
 try {
   PrismaClientKnownRequestError =
@@ -19,6 +18,8 @@ type UpdateProfileInput = {
   email?: string;
   phone?: string;
   password?: string;
+  gender?: string;
+  address?: string;
 };
 
 const userSelect = {
