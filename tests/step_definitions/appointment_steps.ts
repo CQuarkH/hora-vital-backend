@@ -1,12 +1,19 @@
 import { Given, When, Then, Before, After } from "@cucumber/cucumber";
-import { TestFactory, getPrismaClient, cleanDatabase } from "../test-helpers";
+import {
+  TestFactory,
+  getPrismaClient,
+  cleanDatabase,
+  createUserInDb,
+} from "../test-helpers";
 import * as AppointmentService from "../../src/services/appointmentService";
 
+// Mocks simples del emailService para evitar envío real
 const emailService = require("../../src/services/emailService");
 emailService.sendAppointmentConfirmation = async () => true;
 emailService.sendAppointmentReminder = async () => true;
 emailService.sendAppointmentCancellation = async () => true;
 
+// pequeño expect utilitario (tu versión original)
 function expect(actual: any) {
   return {
     toBeDefined: () => {
@@ -35,8 +42,8 @@ function expect(actual: any) {
 interface TimeSlot {
   doctorProfile: {
     id: string;
-    name: string;
-    specialty: string;
+    name?: string;
+    specialty?: string;
   };
   date: string;
   startTime: string;
@@ -59,6 +66,7 @@ interface TestContext {
 
 let testContext: TestContext = {};
 
+// Hooks: limpiar BD antes y después
 Before(async function () {
   await cleanDatabase();
   testContext = {};
@@ -68,49 +76,51 @@ After(async function () {
   await cleanDatabase();
 });
 
+/**
+ * Helpers para crear datos en BD usando las factories y el mapper de test-helpers
+ * Usamos createUserInDb para evitar pasar propiedades que Prisma no espera.
+ */
 async function createTestUser(userData: any) {
-  const prisma = getPrismaClient();
-  return await prisma.user.create({
-    data: TestFactory.createPatient(userData),
-  });
+  // createUserInDb devuelve el resultado de prisma.user.create con shape correcto
+  return createUserInDb("patient", userData);
 }
 
 async function createTestSpecialty(specialtyData: any) {
   const prisma = getPrismaClient();
-  return await prisma.specialty.create({
-    data: TestFactory.createSpecialty(specialtyData),
-  });
+  // TestFactory.createSpecialty ya retorna campos que coinciden con el modelo Specialty
+  const data = TestFactory.createSpecialty(specialtyData);
+  return prisma.specialty.create({ data } as any);
 }
 
 async function createTestDoctorUser(userData: any) {
-  const prisma = getPrismaClient();
-  return await prisma.user.create({
-    data: TestFactory.createDoctor(userData),
-  });
+  return createUserInDb("doctor", userData);
 }
 
 async function createTestDoctorProfile(profileData: any) {
   const prisma = getPrismaClient();
-  return await prisma.doctorProfile.create({
-    data: TestFactory.createDoctorProfile(
-      profileData.userId,
-      profileData.specialtyId,
-      profileData,
-    ),
-  });
+  const data = TestFactory.createDoctorProfile(
+    profileData.userId,
+    profileData.specialtyId,
+    profileData
+  );
+  return prisma.doctorProfile.create({ data } as any);
 }
 
 async function createTestSchedule(scheduleData: any) {
   const prisma = getPrismaClient();
-  return await prisma.schedule.create({
-    data: TestFactory.createSchedule(
-      scheduleData.doctorProfileId,
-      scheduleData,
-    ),
-  });
+  const data = TestFactory.createSchedule(
+    scheduleData.doctorProfileId,
+    scheduleData
+  );
+  return prisma.schedule.create({ data } as any);
 }
 
+/* -------------------------
+   Steps (Gherkin) 
+   ------------------------- */
+
 Given("que el paciente está autenticado en la aplicación", async function () {
+  // Creamos paciente en BD y lo guardamos en contexto
   testContext.authenticatedPatient = await createTestUser({
     name: "Juan Pérez",
     email: "juan.perez@test.com",
@@ -118,16 +128,20 @@ Given("que el paciente está autenticado en la aplicación", async function () {
     rut: "12345678-9",
     role: "PATIENT",
   });
+
+  expect(testContext.authenticatedPatient).toBeDefined();
 });
 
 Given(
   "existen franjas horarias disponibles publicadas en el sistema",
   async function () {
+    // Crear specialty
     testContext.specialty = await createTestSpecialty({
       name: "Cardiología",
       description: "Especialidad en el corazón",
     });
 
+    // Crear user doctor
     testContext.doctorUser = await createTestDoctorUser({
       name: "Dr. Ana García",
       email: "ana.garcia@hospital.com",
@@ -136,12 +150,14 @@ Given(
       role: "DOCTOR",
     });
 
+    // Crear doctorProfile
     testContext.doctorProfile = await createTestDoctorProfile({
       userId: testContext.doctorUser.id,
       specialtyId: testContext.specialty.id,
       licenseNumber: "DOC-12345",
     });
 
+    // Crear schedule para la fecha de mañana
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     testContext.appointmentDate = tomorrow;
@@ -149,21 +165,25 @@ Given(
 
     testContext.schedule = await createTestSchedule({
       doctorProfileId: testContext.doctorProfile.id,
-      dayOfWeek: dayOfWeek,
+      dayOfWeek,
       startTime: "09:00",
       endTime: "17:00",
       slotDuration: 30,
     });
 
+    // Llamamos a AppointmentService para obtener los slots disponibles
     testContext.availableTimeSlots =
       await AppointmentService.getAvailableTimeSlots({
         date: tomorrow,
         doctorProfileId: testContext.doctorProfile.id,
       });
-  },
+
+    expect(testContext.availableTimeSlots).toBeDefined();
+    expect(testContext.availableTimeSlots!.length).toBeGreaterThan(0);
+  }
 );
 
-// Scenario 1: Agendar una cita exitosamente
+// ---------- Escenario positivo ----------
 When('el paciente accede al módulo "Agendar cita"', async function () {
   expect(testContext.authenticatedPatient).toBeDefined();
   expect(testContext.availableTimeSlots).toBeDefined();
@@ -186,7 +206,7 @@ When(
       startTime: testContext.selectedTimeSlot!.startTime,
       notes: "Consulta de rutina",
     };
-  },
+  }
 );
 
 When("completa todos los datos obligatorios", async function () {
@@ -203,10 +223,12 @@ When("completa todos los datos obligatorios", async function () {
 When("confirma y envía los datos", async function () {
   try {
     testContext.createdAppointment = await AppointmentService.createAppointment(
-      testContext.appointmentData,
+      testContext.appointmentData
     );
+    testContext.errorMessage = undefined;
   } catch (error: any) {
-    testContext.errorMessage = error.message;
+    testContext.createdAppointment = undefined;
+    testContext.errorMessage = error?.message ?? String(error);
   }
 });
 
@@ -221,9 +243,9 @@ Then(
   async function () {
     expect(testContext.createdAppointment.patient).toBeDefined();
     expect(testContext.createdAppointment.patient.email).toBe(
-      testContext.authenticatedPatient.email,
+      testContext.authenticatedPatient.email
     );
-  },
+  }
 );
 
 Then("el sistema marca la franja horaria como ocupada", async function () {
@@ -237,14 +259,15 @@ Then("el sistema marca la franja horaria como ocupada", async function () {
 
   const selectedSlot = testContext.selectedTimeSlot as TimeSlot;
   const bookedSlot = newAvailableSlots.find(
-    (slot: any) => slot.startTime === selectedSlot.startTime,
+    (slot: any) => slot.startTime === selectedSlot.startTime
   );
   expect(bookedSlot).toBeUndefined();
 });
 
-// Scenario 2: Intentar agendar sin completar datos obligatorios
+// ---------- Escenario negativo ----------
 When("no completa un dato obligatorio", async function () {
   testContext.appointmentData = {
+    // faltando patientId intencionalmente
     doctorProfileId: testContext.doctorProfile.id,
     specialtyId: testContext.specialty.id,
     appointmentDate: testContext.appointmentDate!,
@@ -258,7 +281,7 @@ Then(
   async function () {
     expect(testContext.errorMessage).toBeDefined();
     expect(testContext.createdAppointment).toBeUndefined();
-  },
+  }
 );
 
 Then("no se registra la cita", async function () {
@@ -276,17 +299,17 @@ Then("la franja horaria sigue disponible", async function () {
 
   const selectedSlot = testContext.selectedTimeSlot as TimeSlot;
   const targetSlot = availableSlots.find(
-    (slot: any) => slot.startTime === selectedSlot.startTime,
+    (slot: any) => slot.startTime === selectedSlot.startTime
   );
   expect(targetSlot).toBeDefined();
 });
 
-// Scenario 3: Intentar agendar la última franja horaria disponible
+// ---------- Escenario frontera ----------
 Given("que solo queda una franja horaria disponible", async function () {
   const appointmentDate = testContext.appointmentDate!;
-
   const slotsToBook = testContext.availableTimeSlots!.slice(0, -1);
 
+  // Reservar todas menos la última con pacientes temporales
   for (const slot of slotsToBook) {
     const tempPatient = await createTestUser({
       name: `Patient ${Math.random()}`,
@@ -300,7 +323,7 @@ Given("que solo queda una franja horaria disponible", async function () {
       patientId: tempPatient.id,
       doctorProfileId: testContext.doctorProfile.id,
       specialtyId: testContext.specialty.id,
-      appointmentDate: appointmentDate,
+      appointmentDate,
       startTime: slot.startTime,
       notes: "Test booking",
     });
