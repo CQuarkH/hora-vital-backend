@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Base de datos para pruebas
+  db_test:
+    image: postgres:15-alpine
+    container_name: k6_db_test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: hora_vital_test
+    ports:
+      - "5433:5432" # Puerto diferente al default para no chocar
+    volumes:
+      - pgdata_test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend conectado a la DB de pruebas
+  backend_test:
+    build: 
+      context: ..
+      dockerfile: Dockerfile
+    container_name: k6_backend_test
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db_test:5432/hora_vital_test?schema=public
+      PORT: 4001
+      JWT_SECRET: test_secret_key_123
+      NODE_ENV: test
+    ports:
+      - "4001:4001"
+    depends_on:
+      db_test:
+        condition: service_healthy
+    command: >
+      sh -c "npx prisma db push && npm start"
+
+  # Servicio k6 para ejecutar pruebas
+  k6:
+    image: grafana/k6:latest
+    container_name: k6_runner
+    volumes:
+      - ./:/scripts
+    environment:
+      - BASE_URL=http://backend_test:4001
+      - K6_OUT=${K6_OUT}
+      - K6_PROMETHEUS_RW_SERVER_URL=${K6_PROMETHEUS_RW_SERVER_URL}
+      - K6_PROMETHEUS_RW_USERNAME=${K6_PROMETHEUS_RW_USERNAME}
+      - K6_PROMETHEUS_RW_PASSWORD=${K6_PROMETHEUS_RW_PASSWORD}
+      - K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM=${K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM}
+    depends_on:
+      - backend_test
+
+volumes:
+  pgdata_test:
