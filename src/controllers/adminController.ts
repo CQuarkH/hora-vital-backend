@@ -586,3 +586,115 @@ export const createSchedule = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Error de servidor" });
   }
 };
+
+/**
+ * @swagger
+ * /api/admin/patients:
+ *   get:
+ *     summary: Lista todos los pacientes
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Página (default 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Tamaño por página (default 20)
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Buscar por nombre (firstName o lastName)
+ *       - in: query
+ *         name: rut
+ *         schema:
+ *           type: string
+ *         description: Buscar por RUT
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: boolean
+ *         description: Filtrar por estado activo
+ *     responses:
+ *       200:
+ *         description: Lista de pacientes con metadata
+ *       500:
+ *         description: Error de servidor
+ */
+export const listPatients = async (req: Request, res: Response) => {
+  try {
+    const q = req.query as Record<string, any>;
+    const filters = {
+      page: Number(q.page ?? 1),
+      limit: Number(q.limit ?? 20),
+      name: q.name as string | undefined,
+      rut: q.rut as string | undefined,
+      status: q.status !== undefined ? q.status === "true" : undefined,
+    };
+
+    const result = await AdminService.listPatients(filters);
+    return res.json(result);
+  } catch (err) {
+    console.error("listPatients error", err);
+    return res.status(500).json({ message: "Error de servidor" });
+  }
+};
+
+/**
+ * @swagger
+ * /api/calendar/availability:
+ *   get:
+ *     summary: Obtener disponibilidad del calendario
+ *     tags: [Admin]
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Fecha inicial del rango
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Fecha final del rango
+ *       - in: query
+ *         name: doctorProfileId
+ *         schema:
+ *           type: string
+ *         description: Filtrar por médico específico
+ *       - in: query
+ *         name: specialtyId
+ *         schema:
+ *           type: string
+ *         description: Filtrar por especialidad
+ *     responses:
+ *       200:
+ *         description: Calendario con disponibilidad
+ *       500:
+ *         description: Error de servidor
+ */
+export const getCalendarAvailability = async (req: Request, res: Response) => {
+  try {
+    const q = req.query as Record<string, any>;
+    const filters = {
+      startDate: new Date(q.startDate as string),
+      endDate: new Date(q.endDate as string),
+      doctorProfileId: q.doctorProfileId as string | undefined,
+      specialtyId: q.specialtyId as string | undefined,
+    };
+
+    const calendarData = await AdminService.getCalendarAvailability(filters);
+    return res.json({ calendar: calendarData });
+  } catch (err) {
+    console.error("getCalendarAvailability error", err);
+    return res.status(500).json({ message: "Error de servidor" });
+  }
+};

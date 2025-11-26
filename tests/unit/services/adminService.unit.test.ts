@@ -289,4 +289,161 @@ describe("adminService (unit)", () => {
       ).rejects.toThrow("Error al verificar conflictos de citas");
     });
   });
+
+  describe("listPatients", () => {
+    it("should query only PATIENT role users", async () => {
+      const mockPatients = [{ id: "p1", role: "PATIENT" }];
+      mockedPrisma.user.findMany.mockResolvedValue(mockPatients);
+      mockedPrisma.user.count.mockResolvedValue(1);
+
+      await AdminService.listPatients({ page: 1, limit: 20 });
+
+      expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ role: "PATIENT" }),
+        })
+      );
+    });
+
+    it("should apply name filter (case-insensitive)", async () => {
+      mockedPrisma.user.findMany.mockResolvedValue([]);
+      mockedPrisma.user.count.mockResolvedValue(0);
+
+      await AdminService.listPatients({ page: 1, limit: 20, name: "juan" });
+
+      expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [
+              { firstName: { contains: "juan", mode: "insensitive" } },
+              { lastName: { contains: "juan", mode: "insensitive" } },
+            ],
+          }),
+        })
+      );
+    });
+
+    it("should apply RUT filter", async () => {
+      mockedPrisma.user.findMany.mockResolvedValue([]);
+      mockedPrisma.user.count.mockResolvedValue(0);
+
+      await AdminService.listPatients({ page: 1, limit: 20, rut: "12.345" });
+
+      expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            rut: { contains: "12.345", mode: "insensitive" },
+          }),
+        })
+      );
+    });
+
+    it("should return correct pagination metadata", async () => {
+      mockedPrisma.user.findMany.mockResolvedValue([]);
+      mockedPrisma.user.count.mockResolvedValue(45);
+
+      const result = await AdminService.listPatients({ page: 2, limit: 20 });
+
+      expect(result.meta).toEqual({
+        total: 45,
+        page: 2,
+        limit: 20,
+        pages: 3,
+      });
+    });
+  });
+
+  describe("getCalendarAvailability", () => {
+    beforeEach(() => {
+      mockedPrisma.doctorProfile = { findMany: jest.fn() };
+      mockedPrisma.appointment.findMany = jest.fn();
+    });
+
+    it("should generate slots for given date range", async () => {
+      const mockDoctors = [
+        {
+          id: "d1",
+          user: { firstName: "Dr.", lastName: "Test" },
+          specialty: { name: "Cardio" },
+          schedules: [
+            {
+              dayOfWeek: 1,
+              startTime: "09:00",
+              endTime: "10:00",
+              slotDuration: 30,
+            },
+          ],
+        },
+      ];
+      mockedPrisma.doctorProfile.findMany.mockResolvedValue(mockDoctors);
+      mockedPrisma.appointment.findMany.mockResolvedValue([]);
+
+      const monday = new Date("2025-12-01"); // Monday
+      const result = await AdminService.getCalendarAvailability({
+        startDate: monday,
+        endDate: monday,
+      });
+
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0]).toHaveProperty("date");
+      expect(result[0]).toHaveProperty("doctor");
+      expect(result[0]).toHaveProperty("slots");
+    });
+
+    it("should respect doctor schedules for specific days", async () => {
+      const mockDoctors = [
+        {
+          id: "d1",
+          user: { firstName: "Dr.", lastName: "Test" },
+          specialty: { name: "Cardio" },
+          schedules: [], // No schedule
+        },
+      ];
+      mockedPrisma.doctorProfile.findMany.mockResolvedValue(mockDoctors);
+
+      const result = await AdminService.getCalendarAvailability({
+        startDate: new Date("2025-12-01"),
+        endDate: new Date("2025-12-01"),
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    it("should mark booked slots as unavailable", async () => {
+      const mockDoctors = [
+        {
+          id: "d1",
+          user: { firstName: "Dr.", lastName: "Test" },
+          specialty: { name: "Cardio" },
+          schedules: [
+            {
+              dayOfWeek: 1,
+              startTime: "09:00",
+              endTime: "10:00",
+              slotDuration: 30,
+            },
+          ],
+        },
+      ];
+      const mockAppointments = [
+        {
+          id: "apt1",
+          startTime: "09:00",
+          patient: { firstName: "Patient", lastName: "Test" },
+        },
+      ];
+
+      mockedPrisma.doctorProfile.findMany.mockResolvedValue(mockDoctors);
+      mockedPrisma.appointment.findMany.mockResolvedValue(mockAppointments);
+
+      const monday = new Date("2025-12-01");
+      const result = await AdminService.getCalendarAvailability({
+        startDate: monday,
+        endDate: monday,
+      });
+
+      const slot = result[0]?.slots?.find((s: any) => s.startTime === "09:00");
+      expect(slot?.isAvailable).toBe(false);
+    });
+  });
 });

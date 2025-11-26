@@ -54,6 +54,27 @@ export const cancelAppointmentSchema = z.object({
   cancellationReason: z.string().min(1, "Motivo de cancelación requerido"),
 });
 
+export const updateAppointmentSchema = z.object({
+  doctorProfileId: z.string().min(1, "ID de médico requerido").optional(),
+  specialtyId: z.string().min(1, "ID de especialidad requerido").optional(),
+  appointmentDate: z
+    .string()
+    .optional()
+    .refine((date) => {
+      if (!date) return true;
+      const parsed = new Date(date);
+      return !isNaN(parsed.getTime()) && parsed > new Date();
+    }, "Fecha de cita debe ser válida y futura"),
+  startTime: z
+    .string()
+    .regex(
+      /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+      "Formato de hora inválido (HH:mm)",
+    )
+    .optional(),
+  notes: z.string().optional(),
+});
+
 export const validate =
   (schema: z.ZodTypeAny) =>
   (req: Request, res: Response, next: NextFunction) => {

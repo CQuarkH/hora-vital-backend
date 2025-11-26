@@ -110,3 +110,29 @@ export const validate =
       return res.status(400).json({ message: "Validation error" });
     }
   };
+
+export const listPatientsSchema = z.object({
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  name: z.string().optional(),
+  rut: z.string().optional(),
+  status: z.string().optional(),
+});
+
+export const validateQuery =
+  (schema: z.ZodTypeAny) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    try {
+      schema.parse(req.query);
+      return next();
+    } catch (err) {
+      const e = err as any;
+      if (e?.errors) {
+        const messages = e.errors.map((it: any) => it.message);
+        return res
+          .status(400)
+          .json({ message: "Validation error", errors: messages });
+      }
+      return res.status(400).json({ message: "Validation error" });
+    }
+  };

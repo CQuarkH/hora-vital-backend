@@ -24,6 +24,14 @@ type AvailabilityFilters = {
   doctorProfileId?: string;
 };
 
+type UpdateAppointmentInput = {
+  doctorProfileId?: string;
+  specialtyId?: string;
+  appointmentDate?: Date;
+  startTime?: string;
+  notes?: string;
+};
+
 const userSelect = {
   id: true,
   firstName: true,
@@ -270,6 +278,139 @@ export const findPatientAppointments = async (
     },
     orderBy: [{ appointmentDate: "asc" }, { startTime: "asc" }],
   });
+};
+
+export const updateAppointment = async (
+  appointmentId: string,
+  data: UpdateAppointmentInput
+) => {
+  // Fetch current appointment
+  const currentAppointment = await findAppointmentById(appointmentId);
+  if (!currentAppointment) {
+    throw new Error("Appointment not found");
+  }
+
+  // Determine if this is a reschedule
+  const isReschedule =
+    (data.doctorProfileId && data.doctorProfileId !== currentAppointment.doctorProfileId) ||
+    (data.appointmentDate &&
+      data.appointmentDate.toISOString() !==
+        currentAppointment.appointmentDate.toISOString()) ||
+    (data.startTime && data.startTime !== currentAppointment.startTime);
+
+  // If rescheduling, validate new slot
+  if (isReschedule) {
+    const newDoctorId = data.doctorProfileId || currentAppointment.doctorProfileId;
+    const newDate = data.appointmentDate || currentAppointment.appointmentDate;
+    const newStartTime = data.startTime || currentAppointment.startTime;
+
+    // Validate doctor exists if changed
+    if (data.doctorProfileId && data.doctorProfileId !== currentAppointment.doctorProfileId) {
+      const doctorProfile = await findDoctorProfile(data.doctorProfileId);
+      if (!doctorProfile) {
+        throw new Error("Doctor not found");
+      }
+
+      // Validate specialty match if both doctor and specialty are being changed
+      if (data.specialtyId && doctorProfile.specialtyId !== data.specialtyId) {
+        throw new Error("Doctor does not belong to the selected specialty");
+      }
+    }
+
+    // Validate schedule
+    const scheduleValidation = await validateDoctorSchedule(
+      newDoctorId,
+      newDate,
+      newStartTime
+    );
+    if (!scheduleValidation.isValid) {
+      throw new Error(scheduleValidation.message);
+    }
+
+    // Check for conflicts (exclude current appointment)
+    const conflict = await prisma.appointment.findFirst({
+      where: {
+        doctorProfileId: newDoctorId,
+        appointmentDate: newDate,
+        startTime: newStartTime,
+        status: {
+          not: "CANCELLED",
+        },
+        id: {
+          not: appointmentId,
+        },
+      },
+    });
+
+    if (conflict) {
+      throw new Error("The time slot is already reserved");
+    }
+  }
+
+  // Calculate endTime if startTime is being updated
+  let endTime: string | undefined;
+  if (data.startTime) {
+    const [startHour, startMinute] = data.startTime.split(":").map(Number);
+    const totalMinutes = startMinute + 30;
+    let endHour = startHour + Math.floor(totalMinutes / 60);
+    const endMinute = totalMinutes % 60;
+
+    if (endHour >= 24) {
+      endHour = endHour % 24;
+    }
+
+    endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+  }
+
+  // Prepare update data
+  const updateData: any = {};
+  if (data.doctorProfileId) updateData.doctorProfileId = data.doctorProfileId;
+  if (data.specialtyId) updateData.specialtyId = data.specialtyId;
+  if (data.appointmentDate) updateData.appointmentDate = data.appointmentDate;
+  if (data.startTime) updateData.startTime = data.startTime;
+  if (endTime) updateData.endTime = endTime;
+  if (data.notes !== undefined) updateData.notes = data.notes;
+
+  // Update appointment
+  const updatedAppointment = await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: updateData,
+    include: {
+      patient: {
+        select: userSelect,
+      },
+      doctorProfile: {
+        include: {
+          user: {
+            select: doctorUserSelect,
+          },
+          specialty: true,
+        },
+      },
+      specialty: true,
+    },
+  });
+
+  // Send notification
+  try {
+    const doctorName = buildFullName(updatedAppointment.doctorProfile?.user);
+    const specialtyName = updatedAppointment.specialty?.name ?? "";
+    await NotificationService.createAppointmentUpdate(
+      updatedAppointment.patientId,
+      {
+        appointmentDate: updatedAppointment.appointmentDate
+          .toISOString()
+          .split("T")[0],
+        startTime: updatedAppointment.startTime,
+        doctorName,
+        specialty: specialtyName,
+      }
+    );
+  } catch (error) {
+    console.error("Failed to create appointment update notification:", error);
+  }
+
+  return updatedAppointment;
 };
 
 export const validateDoctorSchedule = async (

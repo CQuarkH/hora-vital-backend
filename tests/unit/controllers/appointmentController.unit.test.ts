@@ -379,4 +379,95 @@ describe("appointmentController (unit)", () => {
       });
     });
   });
+
+  describe("updateAppointment", () => {
+    const baseReq: any = {
+      user: { id: "p1", role: "PATIENT" },
+      params: { id: "a1" },
+      body: {
+        startTime: "14:00",
+        notes: "Updated notes",
+      },
+    };
+
+    it("should update appointment successfully", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment
+      );
+      mockedAppointmentService.updateAppointment.mockResolvedValue({
+        ...fakeAppointment,
+        notes: "Updated notes",
+      });
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Cita actualizada exitosamente",
+        appointment: expect.objectContaining({
+          notes: "Updated notes",
+        }),
+      });
+    });
+
+    it("returns 404 if appointment not found", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(null);
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: "Cita no encontrada" });
+    });
+
+    it("returns 403 if user doesn't own appointment", async () => {
+      const req: any = {
+        ...baseReq,
+        user: { id: "other-user", role: "PATIENT" },
+      };
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment
+      );
+
+      await AppointmentController.updateAppointment(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "No tienes permisos para editar esta cita",
+      });
+    });
+
+    it("returns 400 if appointment already cancelled/completed", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue({
+        ...fakeAppointment,
+        status: "CANCELLED",
+      });
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "No se puede editar una cita cancelada",
+      });
+    });
+
+    it("returns 409 when new time slot not available", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment
+      );
+      mockedAppointmentService.updateAppointment.mockRejectedValue(
+        new Error("The time slot is already reserved")
+      );
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "El horario ya está reservado",
+      });
+    });
+  });
 });
