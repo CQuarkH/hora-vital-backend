@@ -24,6 +24,9 @@ RUN npm run build
 # STAGE 2: Run the Application (Final Image)
 FROM node:20-alpine AS final
 
+# Instala bash para el script de entrada
+RUN apk add --no-cache bash
+
 WORKDIR /usr/src/app
 
 # Instala solo las dependencias de producción y de ejecución (wait-on)
@@ -32,9 +35,12 @@ COPY --from=build /usr/src/app/package*.json /usr/src/app/
 
 # Copia los archivos compilados y el esquema de Prisma
 COPY --from=build /usr/src/app/dist /usr/src/app/dist
-COPY prisma/schema.prisma ./prisma/
+
+# Copia el esquema de Prisma y archivos necesarios para migraciones y seed
+COPY prisma ./prisma/
 
 # Exponemos el puerto
 EXPOSE 4000
 
+# Ejecuta migraciones, seed y luego inicia el servidor
 CMD ["sh", "-c", "npx wait-on tcp:db:5432 -t 30000 && npx prisma db push && node dist/server.js"]

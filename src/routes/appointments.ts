@@ -21,6 +21,13 @@ router.post(
 );
 
 // Cancelar Cita Médica
+router.patch(
+  "/:id/cancel",
+  authenticate,
+  validate(cancelAppointmentSchema),
+  AppointmentController.cancelAppointment,
+);
+
 router.delete(
   "/:id",
   authenticate,

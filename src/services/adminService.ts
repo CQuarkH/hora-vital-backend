@@ -4,14 +4,7 @@ import bcrypt from "bcrypt";
 import { BCRYPT_SALT_ROUNDS } from "../config";
 import { v4 as uuidv4 } from "uuid";
 import { Prisma } from "@prisma/client";
-
-let PrismaClientKnownRequestError: any;
-try {
-  PrismaClientKnownRequestError =
-    require("@prisma/client/runtime").PrismaClientKnownRequestError;
-} catch (e) {
-  PrismaClientKnownRequestError = Prisma.PrismaClientKnownRequestError;
-}
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 const userSelect = {
   id: true,

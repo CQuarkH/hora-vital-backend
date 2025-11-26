@@ -69,6 +69,6 @@
     "zod": "^4.1.12"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "node dist/scripts/seed.js"
   }
 }

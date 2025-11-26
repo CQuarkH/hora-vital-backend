@@ -1,6 +1,5 @@
 // src/services/appointmentService.ts
 import prisma from "../db/prisma";
-import { AppointmentStatus } from "@prisma/client";
 import * as NotificationService from "./notificationService";
 
 type CreateAppointmentInput = {
@@ -13,7 +12,7 @@ type CreateAppointmentInput = {
 };
 
 type AppointmentFilters = {
-  status?: AppointmentStatus;
+  status?: "SCHEDULED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
   dateFrom?: Date;
   dateTo?: Date;
 };
@@ -153,8 +152,8 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
     });
   } catch (error) {
     console.error(
-      "Failed to create appointment confirmation notification:",
-      error
+      "Failed to create appointment confirmation notification. Error details:",
+      error instanceof Error ? error.message : error
     );
     // swallow - appointment is already created
   }
@@ -225,8 +224,8 @@ export const cancelAppointment = async (
     );
   } catch (error) {
     console.error(
-      "Failed to create appointment cancellation notification:",
-      error
+      "Failed to create appointment cancellation notification. Error details:",
+      error instanceof Error ? error.message : error
     );
   }
 
@@ -396,7 +395,7 @@ export const getAvailableTimeSlots = async (
       },
     });
 
-    const bookedTimes = new Set(bookedAppointments.map((apt) => apt.startTime));
+    const bookedTimes = new Set(bookedAppointments.map((apt: { startTime: string }) => apt.startTime));
 
     let currentHour = startHour;
     let currentMinute = startMinute;
