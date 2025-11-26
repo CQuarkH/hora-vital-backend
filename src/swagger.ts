@@ -45,6 +45,14 @@ const options: swaggerJSDoc.Options = {
                     },
                 },
             },
+            securitySchemes: {
+                BearerAuth: {
+                    type: "http",
+                    scheme: "bearer",
+                    bearerFormat: "JWT",
+                    description: "Ingrese el token JWT obtenido del endpoint de login",
+                },
+            },
         },
     },
     apis: ["./dist/controllers/*.js", "./dist/routes/*.js"], 

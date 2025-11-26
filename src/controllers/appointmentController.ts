@@ -14,6 +14,8 @@ import * as AppointmentService from "../services/appointmentService";
  *   post:
  *     summary: Crear una nueva cita
  *     tags: [Appointments]
+ *     security:
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -128,6 +130,8 @@ export const createAppointment = async (req: Request, res: Response) => {
  *   delete:
  *     summary: Cancelar una cita
  *     tags: [Appointments]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -205,6 +209,8 @@ export const cancelAppointment = async (req: Request, res: Response) => {
  *   put:
  *     summary: Actualizar/Reprogramar una cita médica
  *     tags: [Appointments]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -330,6 +336,8 @@ export const updateAppointment = async (req: Request, res: Response) => {
  *   get:
  *     summary: Obtener mis citas
  *     tags: [Appointments]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: status

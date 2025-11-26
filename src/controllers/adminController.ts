@@ -260,6 +260,8 @@ import * as AdminService from "../services/adminService";
  *   get:
  *     summary: Lista todos los usuarios
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -301,6 +303,8 @@ export const listUsers = async (req: Request, res: Response) => {
  *   post:
  *     summary: Crear un nuevo usuario (admin)
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -348,6 +352,8 @@ export const createUser = async (req: Request, res: Response) => {
  *   put:
  *     summary: Actualiza un usuario
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -399,6 +405,8 @@ export const updateUser = async (req: Request, res: Response) => {
  *   patch:
  *     summary: Cambia el estado activo/inactivo de un usuario
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -445,6 +453,8 @@ export const patchStatus = async (req: Request, res: Response) => {
  *   get:
  *     summary: Lista las citas con filtros
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -512,6 +522,8 @@ export const getAppointments = async (req: Request, res: Response) => {
  *   post:
  *     summary: Crear un nuevo horario para un médico
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -593,6 +605,8 @@ export const createSchedule = async (req: Request, res: Response) => {
  *   get:
  *     summary: Lista todos los pacientes
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -650,6 +664,8 @@ export const listPatients = async (req: Request, res: Response) => {
  *   get:
  *     summary: Obtener disponibilidad del calendario
  *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: startDate
