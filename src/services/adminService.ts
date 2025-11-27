@@ -372,3 +372,193 @@ export const findConflictingAppointments = async (
     throw new Error("Error al verificar conflictos de citas");
   }
 };
+
+type PatientFilters = {
+  page: number;
+  limit: number;
+  name?: string;
+  rut?: string;
+  status?: boolean;
+};
+
+export const listPatients = async (filters: PatientFilters) => {
+  const take = Math.min(filters.limit, 100);
+  const skip = (Math.max(filters.page, 1) - 1) * take;
+
+  const whereClause: any = {
+    role: "PATIENT",
+  };
+
+  // Filter by name (search in firstName or lastName)
+  if (filters.name) {
+    whereClause.OR = [
+      { firstName: { contains: filters.name, mode: "insensitive" } },
+      { lastName: { contains: filters.name, mode: "insensitive" } },
+    ];
+  }
+
+  // Filter by RUT (partial match)
+  if (filters.rut) {
+    whereClause.rut = { contains: filters.rut, mode: "insensitive" };
+  }
+
+  // Filter by active status
+  if (filters.status !== undefined) {
+    whereClause.isActive = filters.status;
+  }
+
+  const [patients, total] = await Promise.all([
+    prisma.user.findMany({
+      where: whereClause,
+      skip,
+      take,
+      select: userSelect,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.count({ where: whereClause }),
+  ]);
+
+  return {
+    patients,
+    meta: {
+      total,
+      page: filters.page,
+      limit: take,
+      pages: Math.ceil(total / take),
+    },
+  };
+};
+
+type CalendarFilters = {
+  startDate: Date;
+  endDate: Date;
+  doctorProfileId?: string;
+  specialtyId?: string;
+};
+
+export const getCalendarAvailability = async (filters: CalendarFilters) => {
+  const whereClause: any = {
+    isActive: true,
+  };
+
+  if (filters.doctorProfileId) {
+    whereClause.id = filters.doctorProfileId;
+  }
+
+  if (filters.specialtyId) {
+    whereClause.specialtyId = filters.specialtyId;
+  }
+
+  const doctorProfiles = await prisma.doctorProfile.findMany({
+    where: whereClause,
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+      specialty: true,
+      schedules: {
+        where: {
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  const calendarData: any[] = [];
+  const currentDate = new Date(filters.startDate);
+  const endDate = new Date(filters.endDate);
+
+  while (currentDate <= endDate) {
+    const dayOfWeek = currentDate.getUTCDay();
+
+    for (const doctor of doctorProfiles) {
+      const schedule = (doctor as any).schedules?.find(
+        (s: any) => s.dayOfWeek === dayOfWeek
+      );
+
+      if (!schedule) continue;
+
+      // Get appointments for this doctor on this date
+      const appointments = await prisma.appointment.findMany({
+        where: {
+          doctorProfileId: doctor.id,
+          appointmentDate: {
+            gte: new Date(new Date(currentDate).setUTCHours(0, 0, 0, 0)),
+            lte: new Date(new Date(currentDate).setUTCHours(23, 59, 59, 999)),
+          },
+          status: {
+            not: "CANCELLED",
+          },
+        },
+        select: {
+          id: true,
+          startTime: true,
+          patient: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      const bookedSlots = new Map(
+        appointments.map((apt) => [apt.startTime, apt])
+      );
+
+      // Generate time slots
+      const slots: any[] = [];
+      const startHour = parseInt(schedule.startTime.split(":")[0], 10);
+      const startMinute = parseInt(schedule.startTime.split(":")[1], 10);
+      const endHour = parseInt(schedule.endTime.split(":")[0], 10);
+      const endMinute = parseInt(schedule.endTime.split(":")[1], 10);
+
+      let currentHour = startHour;
+      let currentMinute = startMinute;
+
+      while (
+        currentHour < endHour ||
+        (currentHour === endHour && currentMinute < endMinute)
+      ) {
+        const timeSlot = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
+        const bookedAppointment = bookedSlots.get(timeSlot);
+
+        slots.push({
+          startTime: timeSlot,
+          isAvailable: !bookedAppointment,
+          appointmentId: bookedAppointment?.id || null,
+          patientName: bookedAppointment
+            ? `${bookedAppointment.patient.firstName} ${bookedAppointment.patient.lastName}`
+            : null,
+        });
+
+        currentMinute += schedule.slotDuration;
+        if (currentMinute >= 60) {
+          currentHour += Math.floor(currentMinute / 60);
+          currentMinute = currentMinute % 60;
+        }
+      }
+
+      if (slots.length > 0) {
+        calendarData.push({
+          date: currentDate.toISOString().split("T")[0],
+          doctor: {
+            id: doctor.id,
+            name: `${doctor.user.firstName} ${doctor.user.lastName}`,
+            specialty: doctor.specialty.name,
+          },
+          slots,
+        });
+      }
+    }
+
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+  }
+
+  return calendarData;
+};

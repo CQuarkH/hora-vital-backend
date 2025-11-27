@@ -9,6 +9,7 @@ import adminRoutes from "./routes/admin";
 import profileRoutes from "./routes/profile";
 import appointmentRoutes from "./routes/appointments";
 import notificationRoutes from "./routes/notifications";
+import calendarRoutes from "./routes/calendar";
 import medicalRoutes from "./routes/medical";
 
 const app = express();
@@ -25,6 +26,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/users", profileRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/calendar", calendarRoutes);
 app.use("/api/medical", medicalRoutes);
 
 // Swagger

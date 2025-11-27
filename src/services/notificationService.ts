@@ -178,3 +178,46 @@ export const createAppointmentCancellation = async (
 
   return notification;
 };
+
+export const createAppointmentUpdate = async (
+  userId: string,
+  appointmentData: any,
+) => {
+  const notification = await createNotification({
+    userId,
+    type: "APPOINTMENT_UPDATE",
+    title: "Cita Actualizada",
+    message: `Tu cita médica ha sido modificada. Nueva fecha: ${appointmentData.appointmentDate} a las ${appointmentData.startTime}`,
+    data: appointmentData,
+  });
+
+  // Skip email sending in test environment
+  if (process.env.NODE_ENV === "test") {
+    console.log(
+      `Email update would be sent to user ${userId} (test mode - not sending)`,
+    );
+    return notification;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+
+  if (user?.email) {
+    try {
+      // Note: Email service function for updates would be implemented here
+      // For now, we'll just log it
+      console.log(
+        `Email update notification would be sent to ${user.email}`,
+      );
+    } catch (error) {
+      console.error(
+        `Failed to send appointment update email to ${user.email}:`,
+        error,
+      );
+    }
+  }
+
+  return notification;
+};

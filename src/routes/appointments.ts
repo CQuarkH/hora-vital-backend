@@ -5,6 +5,7 @@ import {
   validateQuery,
   createAppointmentSchema,
   cancelAppointmentSchema,
+  updateAppointmentSchema,
   myAppointmentsSchema,
   appointmentAvailabilitySchema,
 } from "../validators/appointmentValidator";
@@ -33,6 +34,14 @@ router.delete(
   authenticate,
   validate(cancelAppointmentSchema),
   AppointmentController.cancelAppointment,
+);
+
+// Editar/Actualizar Cita Médica
+router.put(
+  "/:id",
+  authenticate,
+  validate(updateAppointmentSchema),
+  AppointmentController.updateAppointment,
 );
 
 // Visualizar Citas del Paciente

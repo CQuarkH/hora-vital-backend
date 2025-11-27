@@ -14,6 +14,8 @@ import * as ProfileService from "../services/profileService";
  *   get:
  *     summary: Obtener perfil del usuario
  *     tags: [Profile]
+ *     security:
+ *       - BearerAuth: []
  *     responses:
  *       200:
  *         description: Perfil del usuario
@@ -43,6 +45,8 @@ export const getProfile = async (req: Request, res: Response) => {
  *   put:
  *     summary: Actualizar perfil propio
  *     tags: [Profile]
+ *     security:
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
