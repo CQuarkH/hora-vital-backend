@@ -67,5 +67,8 @@
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.27",
     "zod": "^4.1.12"
+  },
+  "prisma": {
+    "seed": "node dist/scripts/seed.js"
   }
 }
