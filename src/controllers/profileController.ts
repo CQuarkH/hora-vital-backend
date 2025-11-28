@@ -66,7 +66,7 @@ export const getProfile = async (req: Request, res: Response) => {
  *                 type: string
  *               gender:
  *                 type: string
- *                 description: Gender del usuario (ej: M, F, NB, etc.)
+ *                 description: "Gender del usuario (ej M, F, NB, etc)"
  *               address:
  *                 type: string
  *     responses:
@@ -104,7 +104,7 @@ export const updateProfile = async (req: Request, res: Response) => {
       phone,
       password,
       gender,
-      address
+      address,
     });
 
     return res.json(updated);
@@ -119,7 +119,6 @@ export const updateProfile = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    // Only log unexpected errors
     console.error("updateProfile unexpected error:", err);
     return res.status(500).json({ message: "Error de servidor" });
   }

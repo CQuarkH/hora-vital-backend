@@ -1,4 +1,3 @@
-// src/services/appointmentService.ts
 import prisma from "../db/prisma";
 import * as NotificationService from "./notificationService";
 
@@ -66,7 +65,7 @@ export const findSpecialty = async (specialtyId: string) => {
 export const checkAppointmentConflict = async (
   doctorProfileId: string,
   appointmentDate: Date,
-  startTime: string
+  startTime: string,
 ) => {
   return prisma.appointment.findFirst({
     where: {
@@ -83,7 +82,7 @@ export const checkAppointmentConflict = async (
 export const checkPatientDuplicateAppointment = async (
   patientId: string,
   doctorProfileId: string,
-  appointmentDate: Date
+  appointmentDate: Date,
 ) => {
   return prisma.appointment.findFirst({
     where: {
@@ -102,12 +101,11 @@ const buildFullName = (user: any) => {
   if (typeof user.firstName === "string" || typeof user.lastName === "string") {
     return `${user.firstName ?? ""}${user.lastName ? " " + user.lastName : ""}`.trim();
   }
-  // backward compat: if tests/mocks still provide `name`
+
   return (user.name as string) ?? "";
 };
 
 export const createAppointment = async (data: CreateAppointmentInput) => {
-  // compute endTime using 30 minutes duration (business rule in this file)
   const [startHour, startMinute] = data.startTime.split(":").map(Number);
   const totalMinutes = startMinute + 30;
   let endHour = startHour + Math.floor(totalMinutes / 60);
@@ -119,33 +117,82 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
 
   const endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      patientId: data.patientId,
-      doctorProfileId: data.doctorProfileId,
-      specialtyId: data.specialtyId,
-      appointmentDate: data.appointmentDate,
-      startTime: data.startTime,
-      endTime,
-      notes: data.notes,
-    },
-    include: {
-      patient: {
-        select: userSelect,
+  let appointment;
+  try {
+    appointment = await prisma.appointment.create({
+      data: {
+        patientId: data.patientId,
+        doctorProfileId: data.doctorProfileId,
+        specialtyId: data.specialtyId,
+        appointmentDate: data.appointmentDate,
+        startTime: data.startTime,
+        endTime,
+        notes: data.notes,
       },
-      doctorProfile: {
-        include: {
-          user: {
-            select: doctorUserSelect,
-          },
-          specialty: true,
+      include: {
+        patient: {
+          select: userSelect,
         },
+        doctorProfile: {
+          include: {
+            user: {
+              select: doctorUserSelect,
+            },
+            specialty: true,
+          },
+        },
+        specialty: true,
       },
-      specialty: true,
-    },
-  });
+    });
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      const cancelledAppointment = await prisma.appointment.findFirst({
+        where: {
+          doctorProfileId: data.doctorProfileId,
+          appointmentDate: data.appointmentDate,
+          startTime: data.startTime,
+          status: "CANCELLED",
+        },
+      });
 
-  // Send notification - should not fail appointment creation
+      if (cancelledAppointment) {
+        await prisma.appointment.delete({
+          where: { id: cancelledAppointment.id },
+        });
+
+        appointment = await prisma.appointment.create({
+          data: {
+            patientId: data.patientId,
+            doctorProfileId: data.doctorProfileId,
+            specialtyId: data.specialtyId,
+            appointmentDate: data.appointmentDate,
+            startTime: data.startTime,
+            endTime,
+            notes: data.notes,
+          },
+          include: {
+            patient: {
+              select: userSelect,
+            },
+            doctorProfile: {
+              include: {
+                user: {
+                  select: doctorUserSelect,
+                },
+                specialty: true,
+              },
+            },
+            specialty: true,
+          },
+        });
+      } else {
+        throw error;
+      }
+    } else {
+      throw error;
+    }
+  }
+
   try {
     const doctorName = buildFullName(appointment.doctorProfile?.user);
     const specialtyName =
@@ -161,9 +208,8 @@ export const createAppointment = async (data: CreateAppointmentInput) => {
   } catch (error) {
     console.error(
       "Failed to create appointment confirmation notification. Error details:",
-      error instanceof Error ? error.message : error
+      error instanceof Error ? error.message : error,
     );
-    // swallow - appointment is already created
   }
 
   return appointment;
@@ -191,7 +237,7 @@ export const findAppointmentById = async (appointmentId: string) => {
 
 export const cancelAppointment = async (
   appointmentId: string,
-  cancellationReason: string
+  cancellationReason: string,
 ) => {
   const appointment = await prisma.appointment.update({
     where: { id: appointmentId },
@@ -215,7 +261,6 @@ export const cancelAppointment = async (
     },
   });
 
-  // Send cancellation notification
   try {
     const doctorName = buildFullName(appointment.doctorProfile?.user);
     await NotificationService.createAppointmentCancellation(
@@ -228,12 +273,12 @@ export const cancelAppointment = async (
         doctorName,
         specialty: appointment.specialty?.name ?? "",
         reason: cancellationReason,
-      }
+      },
     );
   } catch (error) {
     console.error(
       "Failed to create appointment cancellation notification. Error details:",
-      error instanceof Error ? error.message : error
+      error instanceof Error ? error.message : error,
     );
   }
 
@@ -242,7 +287,7 @@ export const cancelAppointment = async (
 
 export const findPatientAppointments = async (
   patientId: string,
-  filters: AppointmentFilters = {}
+  filters: AppointmentFilters = {},
 ) => {
   const whereClause: any = {
     patientId,
@@ -281,52 +326,50 @@ export const findPatientAppointments = async (
 
 export const updateAppointment = async (
   appointmentId: string,
-  data: UpdateAppointmentInput
+  data: UpdateAppointmentInput,
 ) => {
-  // Fetch current appointment
   const currentAppointment = await findAppointmentById(appointmentId);
   if (!currentAppointment) {
     throw new Error("Appointment not found");
   }
 
-  // Determine if this is a reschedule
   const isReschedule =
-    (data.doctorProfileId && data.doctorProfileId !== currentAppointment.doctorProfileId) ||
+    (data.doctorProfileId &&
+      data.doctorProfileId !== currentAppointment.doctorProfileId) ||
     (data.appointmentDate &&
       data.appointmentDate.toISOString() !==
         currentAppointment.appointmentDate.toISOString()) ||
     (data.startTime && data.startTime !== currentAppointment.startTime);
 
-  // If rescheduling, validate new slot
   if (isReschedule) {
-    const newDoctorId = data.doctorProfileId || currentAppointment.doctorProfileId;
+    const newDoctorId =
+      data.doctorProfileId || currentAppointment.doctorProfileId;
     const newDate = data.appointmentDate || currentAppointment.appointmentDate;
     const newStartTime = data.startTime || currentAppointment.startTime;
 
-    // Validate doctor exists if changed
-    if (data.doctorProfileId && data.doctorProfileId !== currentAppointment.doctorProfileId) {
+    if (
+      data.doctorProfileId &&
+      data.doctorProfileId !== currentAppointment.doctorProfileId
+    ) {
       const doctorProfile = await findDoctorProfile(data.doctorProfileId);
       if (!doctorProfile) {
         throw new Error("Doctor not found");
       }
 
-      // Validate specialty match if both doctor and specialty are being changed
       if (data.specialtyId && doctorProfile.specialtyId !== data.specialtyId) {
         throw new Error("Doctor does not belong to the selected specialty");
       }
     }
 
-    // Validate schedule
     const scheduleValidation = await validateDoctorSchedule(
       newDoctorId,
       newDate,
-      newStartTime
+      newStartTime,
     );
     if (!scheduleValidation.isValid) {
       throw new Error(scheduleValidation.message);
     }
 
-    // Check for conflicts (exclude current appointment)
     const conflict = await prisma.appointment.findFirst({
       where: {
         doctorProfileId: newDoctorId,
@@ -346,7 +389,6 @@ export const updateAppointment = async (
     }
   }
 
-  // Calculate endTime if startTime is being updated
   let endTime: string | undefined;
   if (data.startTime) {
     const [startHour, startMinute] = data.startTime.split(":").map(Number);
@@ -361,7 +403,6 @@ export const updateAppointment = async (
     endTime = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
   }
 
-  // Prepare update data
   const updateData: any = {};
   if (data.doctorProfileId) updateData.doctorProfileId = data.doctorProfileId;
   if (data.specialtyId) updateData.specialtyId = data.specialtyId;
@@ -370,7 +411,6 @@ export const updateAppointment = async (
   if (endTime) updateData.endTime = endTime;
   if (data.notes !== undefined) updateData.notes = data.notes;
 
-  // Update appointment
   const updatedAppointment = await prisma.appointment.update({
     where: { id: appointmentId },
     data: updateData,
@@ -390,7 +430,6 @@ export const updateAppointment = async (
     },
   });
 
-  // Send notification
   try {
     const doctorName = buildFullName(updatedAppointment.doctorProfile?.user);
     const specialtyName = updatedAppointment.specialty?.name ?? "";
@@ -403,7 +442,7 @@ export const updateAppointment = async (
         startTime: updatedAppointment.startTime,
         doctorName,
         specialty: specialtyName,
-      }
+      },
     );
   } catch (error) {
     console.error("Failed to create appointment update notification:", error);
@@ -415,7 +454,7 @@ export const updateAppointment = async (
 export const validateDoctorSchedule = async (
   doctorProfileId: string,
   appointmentDate: Date,
-  startTime: string
+  startTime: string,
 ) => {
   const doctorProfile = await prisma.doctorProfile.findUnique({
     where: { id: doctorProfileId },
@@ -434,7 +473,7 @@ export const validateDoctorSchedule = async (
 
   const dayOfWeek = appointmentDate.getDay();
   const schedule = (doctorProfile as any).schedules?.find(
-    (s: any) => s.dayOfWeek === dayOfWeek
+    (s: any) => s.dayOfWeek === dayOfWeek,
   );
 
   if (!schedule) {
@@ -479,7 +518,7 @@ export const validateDoctorSchedule = async (
 };
 
 export const getAvailableTimeSlots = async (
-  filters: AvailabilityFilters = {}
+  filters: AvailabilityFilters = {},
 ) => {
   const whereClause: any = {
     isActive: true,
@@ -514,7 +553,7 @@ export const getAvailableTimeSlots = async (
 
   for (const doctor of doctorProfiles) {
     const schedule = (doctor as any).schedules?.find(
-      (s: any) => s.dayOfWeek === dayOfWeek
+      (s: any) => s.dayOfWeek === dayOfWeek,
     );
     if (!schedule) continue;
 
@@ -536,7 +575,9 @@ export const getAvailableTimeSlots = async (
       },
     });
 
-    const bookedTimes = new Set(bookedAppointments.map((apt: { startTime: string }) => apt.startTime));
+    const bookedTimes = new Set(
+      bookedAppointments.map((apt: { startTime: string }) => apt.startTime),
+    );
 
     let currentHour = startHour;
     let currentMinute = startMinute;
