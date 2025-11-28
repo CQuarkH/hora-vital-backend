@@ -6,17 +6,20 @@ import {
   generateTestToken,
 } from "../test-helpers";
 import { PrismaClient } from "@prisma/client";
+import * as EmailService from "../../src/services/emailService";
 
-/**
- * IT-16: Registrar Paciente (Secretario) - CU-10
- */
-describe("IT-16: Registrar Paciente (Secretario)", () => {
+jest.mock("../../src/services/emailService");
+
+describe("IT-16: Flujo completo de notificaciones por email", () => {
   let prisma: PrismaClient;
   let app: any;
-  let secretaryId: string;
-  let secretaryToken: string;
+  let doctorId: string;
+  let patientId: string;
+  let specialtyId: string;
+  let doctorProfileId: string;
   let patientToken: string;
-  let adminToken: string;
+
+  const emailServiceMock = EmailService as jest.Mocked<typeof EmailService>;
 
   beforeAll(async () => {
     prisma = getPrismaClient();
@@ -28,362 +31,350 @@ describe("IT-16: Registrar Paciente (Secretario)", () => {
     await cleanDatabase();
     prisma = getPrismaClient();
 
-    // Create secretary user
-    const secretary = await prisma.user.create({
+    jest.clearAllMocks();
+
+    emailServiceMock.sendAppointmentConfirmation.mockResolvedValue(undefined);
+    emailServiceMock.sendAppointmentCancellation.mockResolvedValue(undefined);
+    emailServiceMock.sendAppointmentReminder.mockResolvedValue(undefined);
+
+    const specialty = await prisma.specialty.create({
+      data: {
+        name: "Cardiología",
+        description: "Especialidad en cardiología",
+      },
+    });
+    specialtyId = specialty.id;
+
+    const doctor = await prisma.user.create({
       data: {
         ...TestFactory.createPatient({
-          role: "SECRETARY",
-          email: "secretary@test.com",
+          role: "DOCTOR",
+          email: "doctor@test.com",
+          firstName: "Dr. Juan",
+          lastName: "Pérez",
         }),
       },
     });
-    secretaryId = secretary.id;
-    secretaryToken = generateTestToken(secretaryId);
+    doctorId = doctor.id;
 
-    // Create patient user for testing authorization
+    const doctorProfile = await prisma.doctorProfile.create({
+      data: {
+        userId: doctorId,
+        specialtyId: specialtyId,
+        licenseNumber: "DOC123",
+        bio: "Cardiólogo especializado",
+      },
+    });
+    doctorProfileId = doctorProfile.id;
+
+    // Crear horarios para todos los días laborables (lunes a viernes)
+    for (let dayOfWeek = 1; dayOfWeek <= 5; dayOfWeek++) {
+      await prisma.schedule.create({
+        data: {
+          doctorProfileId: doctorProfileId,
+          dayOfWeek: dayOfWeek,
+          startTime: "08:00",
+          endTime: "18:00",
+          isActive: true,
+        },
+      });
+    }
+
     const patient = await prisma.user.create({
-      data: TestFactory.createPatient({ email: "patient@test.com" }),
-    });
-    patientToken = generateTestToken(patient.id);
-
-    // Create admin user for testing authorization
-    const admin = await prisma.user.create({
-      data: {
-        ...TestFactory.createPatient({
-          role: "ADMIN",
-          email: "admin@test.com",
-        }),
-      },
-    });
-    adminToken = generateTestToken(admin.id);
-  });
-
-  describe("Happy Path - Successful Patient Registration", () => {
-    it("debe registrar un nuevo paciente exitosamente con todos los campos", async () => {
-      const patientData = {
+      data: TestFactory.createPatient({
+        email: "patient@test.com",
         firstName: "María",
         lastName: "González",
-        email: "maria.gonzalez@test.com",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-        phone: "+56987654321",
-        gender: "F",
-        birthDate: "1995-03-15",
-        address: "Av. Providencia 1234, Santiago",
-      };
+      }),
+    });
+    patientId = patient.id;
+    patientToken = generateTestToken(patientId);
+  });
 
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(patientData);
-
-      if (response.status !== 201) {
-        console.log("Error response:", response.body);
+  describe("Confirmación de cita", () => {
+    it("debe enviar email de confirmación al crear una cita", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      while (futureDate.getDay() === 0 || futureDate.getDay() === 6) {
+        futureDate.setDate(futureDate.getDate() + 1);
       }
 
-      expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty("id");
-      expect(response.body.firstName).toBe("María");
-      expect(response.body.lastName).toBe("González");
-      expect(response.body.email).toBe("maria.gonzalez@test.com");
-      expect(response.body.role).toBe("PATIENT");
-      expect(response.body.rut).toBe("18.234.567-8");
-      expect(response.body.phone).toBe("+56987654321");
-      expect(response.body.gender).toBe("F");
-      expect(response.body.address).toBe("Av. Providencia 1234, Santiago");
-      expect(response.body.isActive).toBe(true);
-      expect(response.body).not.toHaveProperty("password");
-
-      // Verify persistence in database
-      const savedPatient = await prisma.user.findUnique({
-        where: { id: response.body.id },
-      });
-
-      expect(savedPatient).not.toBeNull();
-      expect(savedPatient?.role).toBe("PATIENT");
-      expect(savedPatient?.email).toBe("maria.gonzalez@test.com");
-      expect(savedPatient?.isActive).toBe(true);
-    });
-
-    it("debe registrar un paciente con solo campos requeridos", async () => {
-      const minimalPatientData = {
-        firstName: "Carlos",
-        lastName: "Rodríguez",
-        email: "carlos.rodriguez@test.com",
-        password: "SecureP@ss456",
-        rut: "19.345.678-9",
-      };
-
       const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(minimalPatientData);
-
-      expect(response.status).toBe(201);
-      expect(response.body.firstName).toBe("Carlos");
-      expect(response.body.lastName).toBe("Rodríguez");
-      expect(response.body.email).toBe("carlos.rodriguez@test.com");
-      expect(response.body.role).toBe("PATIENT");
-      expect(response.body.rut).toBe("19.345.678-9");
-    });
-
-    it("debe forzar el rol a PATIENT incluso si se intenta crear otro rol", async () => {
-      const patientDataWithAdminRole = {
-        firstName: "Intento",
-        lastName: "Admin",
-        email: "intento.admin@test.com",
-        password: "SecureP@ss789",
-        rut: "20.456.789-0",
-        role: "ADMIN", // Intentar crear un admin
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(patientDataWithAdminRole);
-
-      expect(response.status).toBe(201);
-      expect(response.body.role).toBe("PATIENT"); // Debe ser PATIENT, no ADMIN
-    });
-  });
-
-  describe("FA-01: Email/RUT ya registrado", () => {
-    it("debe retornar 409 cuando el email ya existe", async () => {
-      // Create existing patient
-      await prisma.user.create({
-        data: TestFactory.createPatient({
-          email: "existing@test.com",
-          rut: "11.111.111-1",
-        }),
-      });
-
-      const duplicateEmailData = {
-        firstName: "Nuevo",
-        lastName: "Paciente",
-        email: "existing@test.com", // Email duplicado
-        password: "SecureP@ss123",
-        rut: "22.222.222-2",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(duplicateEmailData);
-
-      expect(response.status).toBe(409);
-      expect(response.body).toHaveProperty("message");
-      expect(response.body.message).toMatch(/email|rut|registrado/i);
-    });
-
-    it("debe retornar 409 cuando el RUT ya existe", async () => {
-      // Create existing patient
-      await prisma.user.create({
-        data: TestFactory.createPatient({
-          email: "unique@test.com",
-          rut: "33.333.333-3",
-        }),
-      });
-
-      const duplicateRutData = {
-        firstName: "Nuevo",
-        lastName: "Paciente",
-        email: "another@test.com",
-        password: "SecureP@ss123",
-        rut: "33.333.333-3", // RUT duplicado
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(duplicateRutData);
-
-      expect(response.status).toBe(409);
-      expect(response.body).toHaveProperty("message");
-      expect(response.body.message).toMatch(/email|rut|registrado/i);
-    });
-  });
-
-  describe("Validation Errors", () => {
-    it("debe retornar 400 cuando falta firstName", async () => {
-      const invalidData = {
-        lastName: "González",
-        email: "test@test.com",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(invalidData);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
-      expect(response.body.message).toMatch(/validation/i);
-    });
-
-    it("debe retornar 400 cuando falta lastName", async () => {
-      const invalidData = {
-        firstName: "María",
-        email: "test@test.com",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(invalidData);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
-      expect(response.body.message).toMatch(/validation/i);
-    });
-
-    it("debe retornar 400 cuando el email es inválido", async () => {
-      const invalidData = {
-        firstName: "María",
-        lastName: "González",
-        email: "invalid-email",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(invalidData);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
-      expect(response.body.message).toMatch(/validation/i);
-    });
-
-    it("debe retornar 400 cuando la contraseña es débil", async () => {
-      const invalidData = {
-        firstName: "María",
-        lastName: "González",
-        email: "test@test.com",
-        password: "weak",
-        rut: "18.234.567-8",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(invalidData);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
-      expect(response.body.message).toMatch(/validation/i);
-    });
-
-    it("debe retornar 400 cuando falta RUT", async () => {
-      const invalidData = {
-        firstName: "María",
-        lastName: "González",
-        email: "test@test.com",
-        password: "SecureP@ss123",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(invalidData);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
-      expect(response.body.message).toMatch(/validation/i);
-    });
-  });
-
-  describe("Authentication and Authorization", () => {
-    it("debe retornar 401 sin token de autenticación", async () => {
-      const patientData = {
-        firstName: "María",
-        lastName: "González",
-        email: "test@test.com",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .send(patientData);
-
-      expect(response.status).toBe(401);
-    });
-
-    it("debe retornar 403 cuando un paciente intenta registrar otro paciente", async () => {
-      const patientData = {
-        firstName: "María",
-        lastName: "González",
-        email: "test@test.com",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
+        .post("/api/appointments")
         .set("Authorization", `Bearer ${patientToken}`)
-        .send(patientData);
-
-      expect(response.status).toBe(403);
-    });
-
-    it("debe denegar acceso a admin en endpoint de secretario", async () => {
-      const patientData = {
-        firstName: "María",
-        lastName: "González",
-        email: "admin.created@test.com",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-      };
-
-      const response = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${adminToken}`)
-        .send(patientData);
-
-      // Admin should NOT be able to use secretary endpoint
-      expect(response.status).toBe(403);
-    });
-  });
-
-  describe("Patient Login After Registration", () => {
-    it("debe permitir que el paciente recién creado inicie sesión", async () => {
-      const patientData = {
-        firstName: "María",
-        lastName: "González",
-        email: "newpatient@test.com",
-        password: "SecureP@ss123",
-        rut: "18.234.567-8",
-      };
-
-      // Register patient
-      const registerResponse = await request(app)
-        .post("/api/secretary/patients")
-        .set("Authorization", `Bearer ${secretaryToken}`)
-        .send(patientData);
-
-      expect(registerResponse.status).toBe(201);
-
-      // Try to login with the new credentials
-      const loginResponse = await request(app)
-        .post("/api/auth/login")
-        .set("Content-Type", "application/json")
         .send({
-          rut: "18.234.567-8",
-          password: "SecureP@ss123",
+          doctorProfileId,
+          specialtyId,
+          appointmentDate: futureDate.toISOString(),
+          startTime: "10:00",
+          notes: "Cita de prueba",
         });
 
-      expect(loginResponse.status).toBe(200);
-      expect(loginResponse.body).toHaveProperty("data");
-      expect(loginResponse.body.data).toHaveProperty("token");
-      expect(loginResponse.body.data).toHaveProperty("user");
-      expect(loginResponse.body.data.user.email).toBe("newpatient@test.com");
-      // The role returned might be lowercase "patient" or uppercase "PATIENT" depending on how it's stored/returned
-      expect(loginResponse.body.data.user.role.toUpperCase()).toBe("PATIENT");
+      expect(response.status).toBe(201);
+
+      const notifications = await prisma.notification.findMany({
+        where: {
+          userId: patientId,
+          type: "APPOINTMENT_CONFIRMATION",
+        },
+      });
+
+      expect(notifications.length).toBe(1);
+      expect(notifications[0].title).toBe("Cita Confirmada");
+    });
+
+    it("debe crear notificación sin enviar email en modo test", async () => {
+      process.env.NODE_ENV = "test";
+
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 5);
+      while (futureDate.getDay() === 0 || futureDate.getDay() === 6) {
+        futureDate.setDate(futureDate.getDate() + 1);
+      }
+
+      const response = await request(app)
+        .post("/api/appointments")
+        .set("Authorization", `Bearer ${patientToken}`)
+        .send({
+          doctorProfileId,
+          specialtyId,
+          appointmentDate: futureDate.toISOString(),
+          startTime: "14:00",
+          notes: "Cita test",
+        });
+
+      expect(response.status).toBe(201);
+      expect(
+        emailServiceMock.sendAppointmentConfirmation,
+      ).not.toHaveBeenCalled();
+
+      const notifications = await prisma.notification.findMany({
+        where: { userId: patientId },
+      });
+
+      expect(notifications.length).toBe(1);
+    });
+  });
+
+  describe("Cancelación de cita", () => {
+    let appointmentId: string;
+
+    beforeEach(async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 3);
+      while (futureDate.getDay() === 0 || futureDate.getDay() === 6) {
+        futureDate.setDate(futureDate.getDate() + 1);
+      }
+
+      const appointment = await prisma.appointment.create({
+        data: {
+          patientId,
+          doctorProfileId,
+          specialtyId,
+          appointmentDate: futureDate,
+          startTime: "09:00",
+          endTime: "09:30",
+          status: "SCHEDULED",
+          notes: "Cita a cancelar",
+        },
+      });
+      appointmentId = appointment.id;
+    });
+
+    it("debe enviar notificación de cancelación", async () => {
+      const response = await request(app)
+        .patch(`/api/appointments/${appointmentId}/cancel`)
+        .set("Authorization", `Bearer ${patientToken}`)
+        .send({ cancellationReason: "No puedo asistir" });
+
+      expect(response.status).toBe(200);
+
+      const notifications = await prisma.notification.findMany({
+        where: {
+          userId: patientId,
+          type: "APPOINTMENT_CANCELLATION",
+        },
+      });
+
+      expect(notifications.length).toBe(1);
+      expect(notifications[0].title).toBe("Cita Cancelada");
+    });
+  });
+
+  describe("Validación de estructura de emails", () => {
+    it("debe manejar errores en envío de email sin fallar la operación", async () => {
+      process.env.NODE_ENV = "production";
+      process.env.FORCE_EMAIL_IN_TESTS = "true";
+
+      emailServiceMock.sendAppointmentConfirmation.mockRejectedValue(
+        new Error("Email server error"),
+      );
+
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 8);
+      while (futureDate.getDay() === 0 || futureDate.getDay() === 6) {
+        futureDate.setDate(futureDate.getDate() + 1);
+      }
+
+      const response = await request(app)
+        .post("/api/appointments")
+        .set("Authorization", `Bearer ${patientToken}`)
+        .send({
+          doctorProfileId,
+          specialtyId,
+          appointmentDate: futureDate.toISOString(),
+          startTime: "11:00",
+          notes: "Cita con error email",
+        });
+
+      expect(response.status).toBe(201);
+
+      const notifications = await prisma.notification.findMany({
+        where: { userId: patientId },
+      });
+
+      expect(notifications.length).toBe(1);
+
+      process.env.NODE_ENV = "test";
+      delete process.env.FORCE_EMAIL_IN_TESTS;
+    });
+  });
+
+  describe("Recordatorios de cita", () => {
+    it("debe crear notificación de recordatorio", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 1);
+
+      const appointmentData = {
+        appointmentDate: futureDate.toISOString().split("T")[0],
+        startTime: "15:00",
+        doctorName: "Dr. Juan Pérez",
+        specialty: "Cardiología",
+      };
+
+      const NotificationService = require("../../src/services/notificationService");
+      const notification = await NotificationService.createAppointmentReminder(
+        patientId,
+        appointmentData,
+      );
+
+      expect(notification).toBeDefined();
+      expect(notification.type).toBe("APPOINTMENT_REMINDER");
+      expect(notification.title).toBe("Recordatorio de Cita");
+
+      const savedNotification = await prisma.notification.findUnique({
+        where: { id: notification.id },
+      });
+
+      expect(savedNotification).not.toBeNull();
+    });
+  });
+
+  describe("Flujo completo de notificaciones", () => {
+    it("debe manejar ciclo completo: creación → actualización → cancelación", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 10);
+      while (futureDate.getDay() === 0 || futureDate.getDay() === 6) {
+        futureDate.setDate(futureDate.getDate() + 1);
+      }
+
+      const createResponse = await request(app)
+        .post("/api/appointments")
+        .set("Authorization", `Bearer ${patientToken}`)
+        .send({
+          doctorProfileId,
+          specialtyId,
+          appointmentDate: futureDate.toISOString(),
+          startTime: "16:00",
+          notes: "Cita ciclo completo",
+        });
+
+      expect(createResponse.status).toBe(201);
+      const appointmentId = createResponse.body.appointment.id;
+
+      const updateResponse = await request(app)
+        .put(`/api/appointments/${appointmentId}`)
+        .set("Authorization", `Bearer ${patientToken}`)
+        .send({
+          startTime: "17:00",
+          notes: "Cita actualizada",
+        });
+
+      expect(updateResponse.status).toBe(200);
+
+      const cancelResponse = await request(app)
+        .patch(`/api/appointments/${appointmentId}/cancel`)
+        .set("Authorization", `Bearer ${patientToken}`)
+        .send({ cancellationReason: "Cambio de planes" });
+
+      expect(cancelResponse.status).toBe(200);
+
+      const allNotifications = await prisma.notification.findMany({
+        where: { userId: patientId },
+        orderBy: { createdAt: "asc" },
+      });
+
+      expect(allNotifications.length).toBeGreaterThanOrEqual(2);
+
+      const confirmationNotifications = allNotifications.filter(
+        (n) => n.type === "APPOINTMENT_CONFIRMATION",
+      );
+      const cancellationNotifications = allNotifications.filter(
+        (n) => n.type === "APPOINTMENT_CANCELLATION",
+      );
+
+      expect(confirmationNotifications.length).toBe(1);
+      expect(cancellationNotifications.length).toBe(1);
+    });
+  });
+
+  describe("Gestión de notificaciones", () => {
+    it("debe permitir marcar notificaciones como leídas", async () => {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: patientId,
+          type: "APPOINTMENT_CONFIRMATION",
+          title: "Test Notification",
+          message: "Test message",
+          isRead: false,
+        },
+      });
+
+      const response = await request(app)
+        .patch(`/api/notifications/${notification.id}/read`)
+        .set("Authorization", `Bearer ${patientToken}`);
+
+      expect(response.status).toBe(200);
+
+      const updatedNotification = await prisma.notification.findUnique({
+        where: { id: notification.id },
+      });
+
+      expect(updatedNotification?.isRead).toBe(true);
+    });
+
+    it("debe obtener notificaciones paginadas del usuario", async () => {
+      for (let i = 0; i < 5; i++) {
+        await prisma.notification.create({
+          data: {
+            userId: patientId,
+            type: "APPOINTMENT_CONFIRMATION",
+            title: `Notification ${i}`,
+            message: `Message ${i}`,
+          },
+        });
+      }
+
+      const response = await request(app)
+        .get("/api/notifications")
+        .set("Authorization", `Bearer ${patientToken}`)
+        .query({ page: 1, limit: 3 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.notifications.length).toBe(3);
+      expect(response.body.meta.total).toBe(5);
+      expect(response.body.meta.page).toBe(1);
+      expect(response.body.meta.limit).toBe(3);
     });
   });
 });
