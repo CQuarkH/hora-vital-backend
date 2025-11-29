@@ -58,7 +58,7 @@ export const registerPatient = async (data: RegisterPatientInput) => {
       lastName: data.lastName,
       email: data.email,
       password: hashed,
-      role: "PATIENT", // Force PATIENT role for secretary registration
+      role: "PATIENT",
       rut: data.rut,
       phone: data.phone,
       gender: data.gender,
@@ -79,7 +79,6 @@ export const registerPatient = async (data: RegisterPatientInput) => {
 
     return user;
   } catch (err: any) {
-    // Normalize Prisma unique error to bubble code P2002
     if (
       (PrismaClientKnownRequestError &&
         err instanceof PrismaClientKnownRequestError &&
@@ -183,20 +182,53 @@ export const updateSchedule = async (scheduleId: string, data: any) => {
     throw e;
   }
 
-  const conflictingAppointments = await prisma.appointment.findMany({
-    where: {
-      doctorProfileId: existingSchedule.doctorProfileId,
-      status: { not: "CANCELLED" },
-      appointmentDate: {
-        gte: new Date(),
-      },
-    },
-  });
+  const dayOfWeekToCheck =
+    data.dayOfWeek !== undefined ? data.dayOfWeek : existingSchedule.dayOfWeek;
 
-  if (conflictingAppointments.length > 0) {
-    const e: any = new Error("No se puede modificar, hay citas programadas");
-    e.code = "CONFLICT_WITH_APPOINTMENTS";
-    throw e;
+  // Determinar el rango horario a verificar
+  const newStartTime = data.startTime || existingSchedule.startTime;
+  const newEndTime = data.endTime || existingSchedule.endTime;
+
+  if (data.dayOfWeek !== undefined || data.startTime || data.endTime) {
+    // Buscar citas futuras que coincidan con el día de la semana del horario
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(today.getDate() + 365); // Buscar hasta un año adelante
+
+    const conflictingAppointments = await prisma.appointment.findMany({
+      where: {
+        doctorProfileId: existingSchedule.doctorProfileId,
+        status: { not: "CANCELLED" },
+        appointmentDate: {
+          gte: today,
+          lte: futureDate,
+        },
+      },
+    });
+
+    // Filtrar las citas que realmente caen en el día de la semana y horario que se está modificando
+    const affectedAppointments = conflictingAppointments.filter(
+      (appointment) => {
+        const appointmentDate = new Date(appointment.appointmentDate);
+        const appointmentDayOfWeek = appointmentDate.getDay();
+
+        if (appointmentDayOfWeek !== dayOfWeekToCheck) {
+          return false;
+        }
+
+        const appointmentTime = appointmentDate.toTimeString().substring(0, 5); // HH:MM
+
+        return appointmentTime >= newStartTime && appointmentTime < newEndTime;
+      },
+    );
+
+    if (affectedAppointments.length > 0) {
+      const e: any = new Error(
+        "No se puede modificar, hay citas programadas en este horario",
+      );
+      e.code = "CONFLICT_WITH_APPOINTMENTS";
+      throw e;
+    }
   }
 
   return await prisma.schedule.update({
