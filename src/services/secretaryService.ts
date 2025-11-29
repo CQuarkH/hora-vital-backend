@@ -93,3 +93,226 @@ export const registerPatient = async (data: RegisterPatientInput) => {
     throw err;
   }
 };
+
+export const getDoctorAgenda = async (doctorId: string, date?: string) => {
+  const doctorProfile = await prisma.doctorProfile.findUnique({
+    where: { id: doctorId },
+    include: {
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+        },
+      },
+      specialty: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!doctorProfile) {
+    const e: any = new Error("Doctor no encontrado");
+    e.code = "DOCTOR_NOT_FOUND";
+    throw e;
+  }
+
+  const targetDate = date ? new Date(date) : new Date();
+  const dayOfWeek = targetDate.getDay();
+
+  const schedules = await prisma.schedule.findMany({
+    where: {
+      doctorProfileId: doctorId,
+      dayOfWeek,
+      isActive: true,
+    },
+  });
+
+  const startOfDay = new Date(targetDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(targetDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const [appointments, blockedPeriods] = await Promise.all([
+    prisma.appointment.findMany({
+      where: {
+        doctorProfileId: doctorId,
+        appointmentDate: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        status: { not: "CANCELLED" },
+      },
+    }),
+    prisma.blockedPeriod.findMany({
+      where: {
+        doctorProfileId: doctorId,
+        isActive: true,
+        startDateTime: {
+          lte: endOfDay,
+        },
+        endDateTime: {
+          gte: startOfDay,
+        },
+      },
+    }),
+  ]);
+
+  return {
+    doctor: {
+      id: doctorProfile.id,
+      name: `${doctorProfile.user.firstName} ${doctorProfile.user.lastName}`,
+      specialty: doctorProfile.specialty.name,
+    },
+    date: targetDate,
+    schedules,
+    appointments,
+    blockedPeriods,
+  };
+};
+
+export const updateSchedule = async (scheduleId: string, data: any) => {
+  const existingSchedule = await prisma.schedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!existingSchedule) {
+    const e: any = new Error("Horario no encontrado");
+    e.code = "SCHEDULE_NOT_FOUND";
+    throw e;
+  }
+
+  const conflictingAppointments = await prisma.appointment.findMany({
+    where: {
+      doctorProfileId: existingSchedule.doctorProfileId,
+      status: { not: "CANCELLED" },
+      appointmentDate: {
+        gte: new Date(),
+      },
+    },
+  });
+
+  if (conflictingAppointments.length > 0) {
+    const e: any = new Error("No se puede modificar, hay citas programadas");
+    e.code = "CONFLICT_WITH_APPOINTMENTS";
+    throw e;
+  }
+
+  return await prisma.schedule.update({
+    where: { id: scheduleId },
+    data,
+  });
+};
+
+export const blockPeriod = async (data: any, createdBy: string) => {
+  const { doctorProfileId, startDateTime, endDateTime, reason } = data;
+
+  const doctorProfile = await prisma.doctorProfile.findUnique({
+    where: { id: doctorProfileId },
+  });
+
+  if (!doctorProfile) {
+    const e: any = new Error("Doctor no encontrado");
+    e.code = "DOCTOR_NOT_FOUND";
+    throw e;
+  }
+
+  const conflictingAppointments = await prisma.appointment.findMany({
+    where: {
+      doctorProfileId,
+      status: { not: "CANCELLED" },
+      appointmentDate: {
+        gte: new Date(startDateTime),
+        lte: new Date(endDateTime),
+      },
+    },
+  });
+
+  if (conflictingAppointments.length > 0) {
+    const e: any = new Error("Hay citas programadas en este período");
+    e.code = "CONFLICT_WITH_APPOINTMENTS";
+    throw e;
+  }
+
+  return await prisma.blockedPeriod.create({
+    data: {
+      doctorProfileId,
+      startDateTime: new Date(startDateTime),
+      endDateTime: new Date(endDateTime),
+      reason,
+      createdBy,
+    },
+  });
+};
+
+export const unblockPeriod = async (blockedPeriodId: string) => {
+  const blockedPeriod = await prisma.blockedPeriod.findUnique({
+    where: { id: blockedPeriodId },
+  });
+
+  if (!blockedPeriod) {
+    const e: any = new Error("Período bloqueado no encontrado");
+    e.code = "BLOCKED_PERIOD_NOT_FOUND";
+    throw e;
+  }
+
+  return await prisma.blockedPeriod.update({
+    where: { id: blockedPeriodId },
+    data: { isActive: false },
+  });
+};
+
+export const blockPeriodWithOverride = async (data: any, createdBy: string) => {
+  const { doctorProfileId, startDateTime, endDateTime, reason } = data;
+
+  const doctorProfile = await prisma.doctorProfile.findUnique({
+    where: { id: doctorProfileId },
+  });
+
+  if (!doctorProfile) {
+    const e: any = new Error("Doctor no encontrado");
+    e.code = "DOCTOR_NOT_FOUND";
+    throw e;
+  }
+
+  const conflictingAppointments = await prisma.appointment.findMany({
+    where: {
+      doctorProfileId,
+      status: { not: "CANCELLED" },
+      appointmentDate: {
+        gte: new Date(startDateTime),
+        lte: new Date(endDateTime),
+      },
+    },
+  });
+
+  const blockedPeriod = await prisma.blockedPeriod.create({
+    data: {
+      doctorProfileId,
+      startDateTime: new Date(startDateTime),
+      endDateTime: new Date(endDateTime),
+      reason,
+      createdBy,
+    },
+  });
+
+  if (conflictingAppointments.length > 0) {
+    await prisma.appointment.updateMany({
+      where: {
+        id: {
+          in: conflictingAppointments.map((apt) => apt.id),
+        },
+      },
+      data: {
+        status: "CANCELLED",
+        cancellationReason: "Cancelada por bloqueo de agenda",
+      },
+    });
+  }
+
+  return {
+    blockedPeriod,
+    cancelledAppointments: conflictingAppointments.length,
+  };
+};

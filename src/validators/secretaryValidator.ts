@@ -32,6 +32,27 @@ export const registerPatientSchema = z.object({
   address: z.string().max(255, "Address demasiado larga").optional(),
 });
 
+export const updateScheduleSchema = z.object({
+  dayOfWeek: z.number().min(0).max(6).optional(),
+  startTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "Formato de hora inválido (HH:mm)")
+    .optional(),
+  endTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "Formato de hora inválido (HH:mm)")
+    .optional(),
+  slotDuration: z.number().min(15).max(120).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const blockPeriodSchema = z.object({
+  doctorProfileId: z.string().uuid("ID de doctor inválido"),
+  startDateTime: z.string().datetime("Fecha y hora de inicio inválida"),
+  endDateTime: z.string().datetime("Fecha y hora de fin inválida"),
+  reason: z.string().optional(),
+});
+
 export const validate =
   (schema: z.ZodTypeAny) =>
   (req: Request, res: Response, next: NextFunction) => {

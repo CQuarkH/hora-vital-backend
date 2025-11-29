@@ -39,18 +39,19 @@ model Specialty {
 }
 
 model DoctorProfile {
-  id            String        @id @default(uuid())
-  userId        String        @unique
-  specialtyId   String
-  licenseNumber String        @unique
-  bio           String?
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  appointments  Appointment[]
-  specialty     Specialty     @relation(fields: [specialtyId], references: [id])
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  schedules     Schedule[]
+  id             String          @id @default(uuid())
+  userId         String          @unique
+  specialtyId    String
+  licenseNumber  String          @unique
+  bio            String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  appointments   Appointment[]
+  specialty      Specialty       @relation(fields: [specialtyId], references: [id])
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedules      Schedule[]
+  blockedPeriods BlockedPeriod[]
 }
 
 model Schedule {
@@ -66,6 +67,19 @@ model Schedule {
   doctorProfile   DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
 
   @@unique([doctorProfileId, dayOfWeek])
+}
+
+model BlockedPeriod {
+  id              String        @id @default(uuid())
+  doctorProfileId String
+  startDateTime   DateTime
+  endDateTime     DateTime
+  reason          String?
+  isActive        Boolean       @default(true)
+  createdBy       String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  doctorProfile   DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
 }
 
 model Appointment {
