@@ -44,6 +44,58 @@ const options: swaggerJSDoc.Options = {
             cancellationReason: { type: "string" },
           },
         },
+        Notification: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            userId: { type: "string" },
+            type: { type: "string" },
+            title: { type: "string" },
+            message: { type: "string" },
+            isRead: { type: "boolean" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        NotificationResponse: {
+          type: "object",
+          properties: {
+            data: {
+              type: "array",
+              items: { $ref: "#/components/schemas/Notification" },
+            },
+            pagination: {
+              type: "object",
+              properties: {
+                page: { type: "number" },
+                limit: { type: "number" },
+                total: { type: "number" },
+                pages: { type: "number" },
+              },
+            },
+          },
+        },
+        Specialty: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            description: { type: "string" },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
+        DoctorProfile: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            userId: { type: "string" },
+            specialtyId: { type: "string" },
+            licenseNumber: { type: "string" },
+            isActive: { type: "boolean" },
+            user: { $ref: "#/components/schemas/User" },
+            specialty: { $ref: "#/components/schemas/Specialty" },
+          },
+        },
       },
       securitySchemes: {
         BearerAuth: {
