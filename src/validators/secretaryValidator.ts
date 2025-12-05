@@ -9,9 +9,10 @@ export const registerPatientSchema = z.object({
   password: z
     .string()
     .min(8, "La contraseña debe tener al menos 8 caracteres")
-    .regex(/(?=.*[a-z])/, "Debe contener minúscula")
-    .regex(/(?=.*[A-Z])/, "Debe contener mayúscula")
-    .regex(/(?=.*\d)/, "Debe contener número"),
+    .refine(
+      (pwd) => /[a-z]/.test(pwd) && /[A-Z]/.test(pwd) && /\d/.test(pwd),
+      "La contraseña debe contener al menos: una minúscula, una mayúscula y un número",
+    ),
   rut: z.string().min(1, "RUT requerido"),
   phone: z.string().optional(),
   gender: z
@@ -36,11 +37,17 @@ export const updateScheduleSchema = z.object({
   dayOfWeek: z.number().min(0).max(6).optional(),
   startTime: z
     .string()
-    .regex(/^\d{2}:\d{2}$/, "Formato de hora inválido (HH:mm)")
+    .refine(
+      (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time),
+      "Formato de hora inválido (HH:mm)",
+    )
     .optional(),
   endTime: z
     .string()
-    .regex(/^\d{2}:\d{2}$/, "Formato de hora inválido (HH:mm)")
+    .refine(
+      (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time),
+      "Formato de hora inválido (HH:mm)",
+    )
     .optional(),
   slotDuration: z.number().min(15).max(120).optional(),
   isActive: z.boolean().optional(),

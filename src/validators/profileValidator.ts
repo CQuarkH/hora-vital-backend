@@ -9,9 +9,10 @@ export const profileUpdateSchema = z.object({
   password: z
     .string()
     .min(8, "La contraseña debe tener al menos 8 caracteres")
-    .regex(/(?=.*[a-z])/, "Debe contener minúscula")
-    .regex(/(?=.*[A-Z])/, "Debe contener mayúscula")
-    .regex(/(?=.*\d)/, "Debe contener número")
+    .refine(
+      (pwd) => /[a-z]/.test(pwd) && /[A-Z]/.test(pwd) && /\d/.test(pwd),
+      "La contraseña debe contener al menos: una minúscula, una mayúscula y un número",
+    )
     .optional(),
   gender: z
     .string()
