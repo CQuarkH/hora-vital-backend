@@ -102,7 +102,10 @@ export const createAppointmentConfirmation = async (
     data: appointmentData,
   });
 
-  if (process.env.NODE_ENV === "test") {
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.FORCE_EMAIL_IN_TESTS !== "true"
+  ) {
     console.log(
       `Email confirmation would be sent to user ${userId} (test mode - not sending)`,
     );
@@ -126,8 +129,6 @@ export const createAppointmentConfirmation = async (
         `Failed to send appointment confirmation email to ${user.email}:`,
         error,
       );
-      // Email failure should not prevent the notification from being created
-      // The notification is already saved in the database
     }
   }
 
@@ -146,8 +147,10 @@ export const createAppointmentCancellation = async (
     data: appointmentData,
   });
 
-  // Skip email sending in test environment
-  if (process.env.NODE_ENV === "test") {
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.FORCE_EMAIL_IN_TESTS !== "true"
+  ) {
     console.log(
       `Email cancellation would be sent to user ${userId} (test mode - not sending)`,
     );
@@ -171,8 +174,47 @@ export const createAppointmentCancellation = async (
         `Failed to send appointment cancellation email to ${user.email}:`,
         error,
       );
-      // Email failure should not prevent the notification from being created
-      // The notification is already saved in the database
+    }
+  }
+
+  return notification;
+};
+
+export const createAppointmentUpdate = async (
+  userId: string,
+  appointmentData: any,
+) => {
+  const notification = await createNotification({
+    userId,
+    type: "APPOINTMENT_UPDATE",
+    title: "Cita Actualizada",
+    message: `Tu cita médica ha sido modificada. Nueva fecha: ${appointmentData.appointmentDate} a las ${appointmentData.startTime}`,
+    data: appointmentData,
+  });
+
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.FORCE_EMAIL_IN_TESTS !== "true"
+  ) {
+    console.log(
+      `Email update would be sent to user ${userId} (test mode - not sending)`,
+    );
+    return notification;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+
+  if (user?.email) {
+    try {
+      console.log(`Email update notification would be sent to ${user.email}`);
+    } catch (error) {
+      console.error(
+        `Failed to send appointment update email to ${user.email}:`,
+        error,
+      );
     }
   }
 

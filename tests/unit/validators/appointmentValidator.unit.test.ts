@@ -145,4 +145,93 @@ describe("appointmentValidator (unit)", () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
   });
+
+  describe("updateAppointmentSchema via middleware", () => {
+    const { updateAppointmentSchema } =
+      require("../../../src/validators/appointmentValidator");
+
+    it("accepts partial updates", () => {
+      const req: any = { body: { notes: "Updated notes only" } };
+      const res = createMockResponse();
+      const mw = validate(updateAppointmentSchema);
+      mw(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it("validates date format if provided", () => {
+      const req: any = {
+        body: {
+          appointmentDate: new Date(
+            Date.now() + 1000 * 60 * 60 * 24
+          ).toISOString(),
+        },
+      };
+      const res = createMockResponse();
+      const mw = validate(updateAppointmentSchema);
+      mw(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it("validates time format if provided", () => {
+      const invalidReq: any = { body: { startTime: "25:00" } };
+      const res = createMockResponse();
+      const mw = validate(updateAppointmentSchema);
+      mw(invalidReq, res, next);
+      expect(res.status).toHaveBeenCalledWith(400);
+
+      jest.clearAllMocks();
+      const validReq: any = { body: { startTime: "14:30" } };
+      const res2 = createMockResponse();
+      mw(validReq, res2, next);
+      expect(next).toHaveBeenCalled();
+    });
+  });
+
+  describe("calendarAvailabilitySchema via query validator", () => {
+    const { calendarAvailabilitySchema } =
+      require("../../../src/validators/calendarValidator");
+    const { validateQuery: calValidateQuery } =
+      require("../../../src/validators/calendarValidator");
+
+    it("validates valid date range", () => {
+      const req: any = {
+        query: {
+          startDate: "2025-12-01",
+          endDate: "2025-12-07",
+        },
+      };
+      const res = createMockResponse();
+      const mw = calValidateQuery(calendarAvailabilitySchema);
+      mw(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it("rejects invalid date formats", () => {
+      const req: any = {
+        query: {
+          startDate: "invalid",
+          endDate: "2025-12-07",
+        },
+      };
+      const res = createMockResponse();
+      const mw = calValidateQuery(calendarAvailabilitySchema);
+      mw(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it("validates optional filters", () => {
+      const req: any = {
+        query: {
+          startDate: "2025-12-01",
+          endDate: "2025-12-07",
+          doctorProfileId: "doctor-123",
+          specialtyId: "specialty-456",
+        },
+      };
+      const res = createMockResponse();
+      const mw = calValidateQuery(calendarAvailabilitySchema);
+      mw(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+  });
 });

@@ -51,4 +51,10 @@ router.post(
   AdminController.createSchedule,
 );
 
+router.get(
+  "/patients",
+  authorizeRoles("ADMIN", "SECRETARY"),
+  AdminController.listPatients,
+);
+
 export default router;

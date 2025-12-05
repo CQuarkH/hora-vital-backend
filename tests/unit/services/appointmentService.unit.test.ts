@@ -545,3 +545,205 @@ describe("AppointmentService", () => {
     });
   });
 });
+
+describe("updateAppointment", () => {
+  it("should update appointment notes without reschedule", async () => {
+    const currentAppointment = {
+      id: "appointment-1",
+      patientId: "patient-1",
+      doctorProfileId: "doctor-1",
+      specialtyId: "specialty-1",
+      appointmentDate: new Date("2025-12-01"),
+      startTime: "10:00",
+      endTime: "10:30",
+      status: "SCHEDULED",
+      notes: "Original notes",
+    };
+
+    const updatedAppointment = {
+      ...currentAppointment,
+      notes: "Updated notes",
+      patient: {
+        id: "patient-1",
+        firstName: "Patient",
+        lastName: "Test",
+        email: "patient@test.com",
+        phone: "123456789",
+      },
+      doctorProfile: {
+        id: "doctor-1",
+        user: { id: "user-1", firstName: "Dr.", lastName: "Test" },
+        specialty: { id: "specialty-1", name: "Cardiología" },
+      },
+      specialty: { id: "specialty-1", name: "Cardiología" },
+    };
+
+    mockPrisma.appointment.findUnique.mockResolvedValue(currentAppointment);
+    mockPrisma.appointment.update.mockResolvedValue(updatedAppointment);
+    mockNotificationService.createAppointmentUpdate.mockResolvedValue({});
+
+    const result = await AppointmentService.updateAppointment("appointment-1", {
+      notes: "Updated notes",
+    });
+
+    expect(result).toEqual(updatedAppointment);
+    expect(mockPrisma.appointment.update).toHaveBeenCalledWith({
+      where: { id: "appointment-1" },
+      data: { notes: "Updated notes" },
+      include: expect.any(Object),
+    });
+    expect(mockNotificationService.createAppointmentUpdate).toHaveBeenCalled();
+  });
+
+  it("should reschedule appointment to new time slot", async () => {
+    const currentAppointment = {
+      id: "appointment-1",
+      patientId: "patient-1",
+      doctorProfileId: "doctor-1",
+      specialtyId: "specialty-1",
+      appointmentDate: new Date("2025-12-01T12:00:00Z"),
+      startTime: "10:00",
+      status: "SCHEDULED",
+    };
+
+    const mockDoctorProfile = {
+      id: "doctor-1",
+      specialtyId: "specialty-1",
+      schedules: [
+        {
+          dayOfWeek: 1,
+          startTime: "09:00",
+          endTime: "17:00",
+          slotDuration: 30,
+          isActive: true,
+        },
+      ],
+    };
+
+    mockPrisma.appointment.findUnique.mockResolvedValue(currentAppointment);
+    mockPrisma.doctorProfile.findUnique.mockResolvedValue(mockDoctorProfile);
+    mockPrisma.appointment.findFirst.mockResolvedValue(null); // No conflict
+    mockPrisma.appointment.update.mockResolvedValue({
+      ...currentAppointment,
+      startTime: "14:00",
+      endTime: "14:30",
+      patient: {},
+      doctorProfile: { user: {}, specialty: {} },
+      specialty: {},
+    });
+    mockNotificationService.createAppointmentUpdate.mockResolvedValue({});
+
+    await AppointmentService.updateAppointment("appointment-1", {
+      startTime: "14:00",
+    });
+
+    expect(mockPrisma.doctorProfile.findUnique).toHaveBeenCalled();
+    expect(mockPrisma.appointment.findFirst).toHaveBeenCalled();
+    expect(mockPrisma.appointment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          startTime: "14:00",
+          endTime: "14:30",
+        }),
+      })
+    );
+  });
+
+  it("should validate new slot availability when rescheduling", async () => {
+    const currentAppointment = {
+      id: "appointment-1",
+      patientId: "patient-1",
+      doctorProfileId: "doctor-1",
+      appointmentDate: new Date("2025-12-01T12:00:00Z"),
+      startTime: "10:00",
+    };
+
+    const mockDoctorProfile = {
+      id: "doctor-1",
+      schedules: [
+        {
+          dayOfWeek: 1,
+          startTime: "09:00",
+          endTime: "17:00",
+          slotDuration: 30,
+          isActive: true,
+        },
+      ],
+    };
+
+    mockPrisma.appointment.findUnique.mockResolvedValue(currentAppointment);
+    mockPrisma.doctorProfile.findUnique.mockResolvedValue(mockDoctorProfile);
+    mockPrisma.appointment.findFirst.mockResolvedValue({
+      id: "other-appointment",
+      startTime: "14:00",
+    }); // Conflict exists
+
+    await expect(
+      AppointmentService.updateAppointment("appointment-1", {
+        startTime: "14:00",
+      })
+    ).rejects.toThrow("The time slot is already reserved");
+  });
+
+  it("should send notification on update", async () => {
+    const currentAppointment = {
+      id: "appointment-1",
+      patientId: "patient-1",
+      doctorProfileId: "doctor-1",
+      appointmentDate: new Date("2025-12-01"),
+      startTime: "10:00",
+    };
+
+    mockPrisma.appointment.findUnique.mockResolvedValue(currentAppointment);
+    mockPrisma.appointment.update.mockResolvedValue({
+      ...currentAppointment,
+      notes: "Updated",
+      patient: { id: "patient-1" },
+      doctorProfile: {
+        user: { firstName: "Dr.", lastName: "Test" },
+        specialty: { name: "Cardiología" },
+      },
+      specialty: { name: "Cardiología" },
+    });
+    mockNotificationService.createAppointmentUpdate.mockResolvedValue({});
+
+    await AppointmentService.updateAppointment("appointment-1", {
+      notes: "Updated",
+    });
+
+    expect(mockNotificationService.createAppointmentUpdate).toHaveBeenCalledWith(
+      "patient-1",
+      expect.objectContaining({
+        appointmentDate: "2025-12-01",
+        startTime: "10:00",
+        doctorName: "Dr. Test",
+        specialty: "Cardiología",
+      })
+    );
+  });
+
+  it("should validate specialty change matches doctor", async () => {
+    const currentAppointment = {
+      id: "appointment-1",
+      doctorProfileId: "doctor-1",
+      specialtyId: "specialty-1",
+      appointmentDate: new Date("2025-12-01"),
+      startTime: "10:00",
+    };
+
+    const mockDoctorProfile = {
+      id: "doctor-2",
+      specialtyId: "specialty-2", // Different specialty
+    };
+
+    mockPrisma.appointment.findUnique.mockResolvedValue(currentAppointment);
+    mockPrisma.doctorProfile.findUnique.mockResolvedValue(mockDoctorProfile);
+
+    await expect(
+      AppointmentService.updateAppointment("appointment-1", {
+        doctorProfileId: "doctor-2",
+        specialtyId: "specialty-1",
+      })
+    ).rejects.toThrow("Doctor does not belong to the selected specialty");
+  });
+});

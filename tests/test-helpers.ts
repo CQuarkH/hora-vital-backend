@@ -20,7 +20,7 @@ export function getPrismaClient(): PrismaClient {
     if (!process.env.SKIP_PRISMA_PUSH) {
       try {
         console.log(
-          "Intentando `npx prisma db push --skip-generate` (tests)..."
+          "Intentando `npx prisma db push --skip-generate` (tests)...",
         );
         execSync("npx prisma db push --skip-generate", {
           stdio: "inherit",
@@ -30,7 +30,7 @@ export function getPrismaClient(): PrismaClient {
       } catch (err) {
         console.warn(
           "Aviso: `prisma db push` falló o no aplica. Si tienes migraciones correctamente ejecutadas puedes ignorar este warning.",
-          (err as any)?.message ?? err
+          (err as any)?.message ?? err,
         );
       }
     } else {
@@ -72,7 +72,7 @@ export async function cleanDatabase(): Promise<void> {
 
   try {
     const rows: Array<{ tablename: string }> = await client.$queryRawUnsafe(
-      `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`
+      `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
     );
 
     const allTables = rows.map((r) => r.tablename).filter(Boolean);
@@ -80,7 +80,7 @@ export async function cleanDatabase(): Promise<void> {
     // Excluir la tabla de migraciones y cualquier otra que no queramos tocar
     const excluded = ["_prisma_migrations"];
     const tablesToTruncate = allTables.filter(
-      (t) => !excluded.includes(t.toLowerCase())
+      (t) => !excluded.includes(t.toLowerCase()),
     );
 
     if (tablesToTruncate.length === 0) {
@@ -92,7 +92,7 @@ export async function cleanDatabase(): Promise<void> {
     for (const t of tablesToTruncate) {
       // Quote identificador directo para seguridad
       await client.$executeRawUnsafe(
-        `ALTER TABLE IF EXISTS ${quoteIdent(t)} DISABLE TRIGGER ALL`
+        `ALTER TABLE IF EXISTS ${quoteIdent(t)} DISABLE TRIGGER ALL`,
       );
     }
 
@@ -106,7 +106,7 @@ export async function cleanDatabase(): Promise<void> {
     // Reactivar triggers
     for (const t of tablesToTruncate) {
       await client.$executeRawUnsafe(
-        `ALTER TABLE IF EXISTS ${quoteIdent(t)} ENABLE TRIGGER ALL`
+        `ALTER TABLE IF EXISTS ${quoteIdent(t)} ENABLE TRIGGER ALL`,
       );
     }
 
@@ -174,28 +174,30 @@ export const TestFactory = {
     const fullName = overrides.fullName ?? overrides.name ?? "Juan Pérez";
     const { firstName, lastName } = splitName(fullName);
 
+    const { fullName: _, name: __, ...cleanOverrides } = overrides;
+
     return {
       id: uuid,
       firstName,
       lastName,
       rut:
-        overrides.rut ??
+        cleanOverrides.rut ??
         `${Math.floor(Math.random() * 100000000)}-${Math.floor(
-          Math.random() * 10
+          Math.random() * 10,
         )}`,
       email:
-        overrides.email ??
+        cleanOverrides.email ??
         `patient.${Date.now()}.${Math.random()}.${uuid.substring(0, 8)}@test.com`,
-      phone: overrides.phone ?? "+56912345678",
-      password: overrides.password ?? "$2b$10$test.hash.password",
+      phone: cleanOverrides.phone ?? "+56912345678",
+      password: cleanOverrides.password ?? "$2b$10$test.hash.password",
       role: "PATIENT" as const,
-      isActive: overrides.isActive ?? true,
-      gender: overrides.gender ?? null,
-      birthDate: overrides.birthDate ?? null,
-      address: overrides.address ?? null,
-      createdAt: overrides.createdAt ?? new Date(),
-      updatedAt: overrides.updatedAt ?? new Date(),
-      ...overrides,
+      isActive: cleanOverrides.isActive ?? true,
+      gender: cleanOverrides.gender ?? null,
+      birthDate: cleanOverrides.birthDate ?? null,
+      address: cleanOverrides.address ?? null,
+      createdAt: cleanOverrides.createdAt ?? new Date(),
+      updatedAt: cleanOverrides.updatedAt ?? new Date(),
+      ...cleanOverrides,
     };
   },
 
@@ -220,35 +222,37 @@ export const TestFactory = {
       overrides.fullName ?? overrides.name ?? "Dra. María González";
     const { firstName, lastName } = splitName(fullName);
 
+    const { fullName: _, name: __, ...cleanOverrides } = overrides;
+
     return {
       id: uuid,
       firstName,
       lastName,
       rut:
-        overrides.rut ??
+        cleanOverrides.rut ??
         `${Math.floor(Math.random() * 100000000)}-${Math.floor(
-          Math.random() * 10
+          Math.random() * 10,
         )}`,
       email:
-        overrides.email ??
+        cleanOverrides.email ??
         `doctor.${Date.now()}.${Math.random()}.${uuid.substring(0, 8)}@test.com`,
-      phone: overrides.phone ?? "+56987654321",
-      password: overrides.password ?? "$2b$10$test.hash.password",
+      phone: cleanOverrides.phone ?? "+56987654321",
+      password: cleanOverrides.password ?? "$2b$10$test.hash.password",
       role: "DOCTOR" as const,
-      isActive: overrides.isActive ?? true,
-      gender: overrides.gender ?? null,
-      birthDate: overrides.birthDate ?? null,
-      address: overrides.address ?? null,
-      createdAt: overrides.createdAt ?? new Date(),
-      updatedAt: overrides.updatedAt ?? new Date(),
-      ...overrides,
+      isActive: cleanOverrides.isActive ?? true,
+      gender: cleanOverrides.gender ?? null,
+      birthDate: cleanOverrides.birthDate ?? null,
+      address: cleanOverrides.address ?? null,
+      createdAt: cleanOverrides.createdAt ?? new Date(),
+      updatedAt: cleanOverrides.updatedAt ?? new Date(),
+      ...cleanOverrides,
     };
   },
 
   createDoctorProfile: (
     userId: string,
     specialtyId: string,
-    overrides: Record<string, any> = {}
+    overrides: Record<string, any> = {},
   ) => {
     return {
       id: uuidv4(),
@@ -267,7 +271,7 @@ export const TestFactory = {
 
   createSchedule: (
     doctorProfileId: string,
-    overrides: Record<string, any> = {}
+    overrides: Record<string, any> = {},
   ) => {
     return {
       id: uuidv4(),
@@ -287,7 +291,7 @@ export const TestFactory = {
     patientId: string,
     doctorProfileId: string,
     specialtyId: string,
-    overrides: Record<string, any> = {}
+    overrides: Record<string, any> = {},
   ) => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -339,7 +343,7 @@ export function userFactoryToPrismaData(userObj: Record<string, any>) {
  */
 export async function createUserInDb(
   kind: "patient" | "doctor",
-  overrides: Record<string, any> = {}
+  overrides: Record<string, any> = {},
 ) {
   const client = getPrismaClient();
   const factoryData =

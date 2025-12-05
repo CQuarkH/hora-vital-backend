@@ -62,6 +62,9 @@ interface TestContext {
   schedule?: any;
   doctorUser?: any;
   appointmentDate?: Date;
+  secondPatient?: any;
+  secondAppointment?: any;
+  secondErrorMessage?: string;
 }
 
 let testContext: TestContext = {};
@@ -101,7 +104,7 @@ async function createTestDoctorProfile(profileData: any) {
   const data = TestFactory.createDoctorProfile(
     profileData.userId,
     profileData.specialtyId,
-    profileData
+    profileData,
   );
   return prisma.doctorProfile.create({ data } as any);
 }
@@ -110,7 +113,7 @@ async function createTestSchedule(scheduleData: any) {
   const prisma = getPrismaClient();
   const data = TestFactory.createSchedule(
     scheduleData.doctorProfileId,
-    scheduleData
+    scheduleData,
   );
   return prisma.schedule.create({ data } as any);
 }
@@ -180,7 +183,7 @@ Given(
 
     expect(testContext.availableTimeSlots).toBeDefined();
     expect(testContext.availableTimeSlots!.length).toBeGreaterThan(0);
-  }
+  },
 );
 
 // ---------- Escenario positivo ----------
@@ -206,7 +209,7 @@ When(
       startTime: testContext.selectedTimeSlot!.startTime,
       notes: "Consulta de rutina",
     };
-  }
+  },
 );
 
 When("completa todos los datos obligatorios", async function () {
@@ -223,7 +226,7 @@ When("completa todos los datos obligatorios", async function () {
 When("confirma y envía los datos", async function () {
   try {
     testContext.createdAppointment = await AppointmentService.createAppointment(
-      testContext.appointmentData
+      testContext.appointmentData,
     );
     testContext.errorMessage = undefined;
   } catch (error: any) {
@@ -243,9 +246,9 @@ Then(
   async function () {
     expect(testContext.createdAppointment.patient).toBeDefined();
     expect(testContext.createdAppointment.patient.email).toBe(
-      testContext.authenticatedPatient.email
+      testContext.authenticatedPatient.email,
     );
-  }
+  },
 );
 
 Then("el sistema marca la franja horaria como ocupada", async function () {
@@ -259,7 +262,7 @@ Then("el sistema marca la franja horaria como ocupada", async function () {
 
   const selectedSlot = testContext.selectedTimeSlot as TimeSlot;
   const bookedSlot = newAvailableSlots.find(
-    (slot: any) => slot.startTime === selectedSlot.startTime
+    (slot: any) => slot.startTime === selectedSlot.startTime,
   );
   expect(bookedSlot).toBeUndefined();
 });
@@ -281,7 +284,7 @@ Then(
   async function () {
     expect(testContext.errorMessage).toBeDefined();
     expect(testContext.createdAppointment).toBeUndefined();
-  }
+  },
 );
 
 Then("no se registra la cita", async function () {
@@ -299,7 +302,7 @@ Then("la franja horaria sigue disponible", async function () {
 
   const selectedSlot = testContext.selectedTimeSlot as TimeSlot;
   const targetSlot = availableSlots.find(
-    (slot: any) => slot.startTime === selectedSlot.startTime
+    (slot: any) => slot.startTime === selectedSlot.startTime,
   );
   expect(targetSlot).toBeDefined();
 });
@@ -350,4 +353,190 @@ Then("no quedan más franjas horarias disponibles", async function () {
   });
 
   expect(availableSlots.length).toBe(0);
+});
+
+// ---------- Escenarios faltantes ----------
+Given("que existe una franja horaria ocupada", async function () {
+  const occupiedSlot = testContext.availableTimeSlots![0];
+  const tempPatient = await createTestUser({
+    name: "Temp Patient",
+    email: "temp@test.com",
+    phone: "+56912345679",
+    rut: "11111111-1",
+    role: "PATIENT",
+  });
+
+  await AppointmentService.createAppointment({
+    patientId: tempPatient.id,
+    doctorProfileId: testContext.doctorProfile.id,
+    specialtyId: testContext.specialty.id,
+    appointmentDate: testContext.appointmentDate!,
+    startTime: occupiedSlot.startTime,
+    notes: "Test occupied slot",
+  });
+
+  testContext.selectedTimeSlot = occupiedSlot;
+});
+
+When("el paciente intenta agendar en esa franja horaria", async function () {
+  try {
+    testContext.createdAppointment = await AppointmentService.createAppointment(
+      {
+        patientId: testContext.authenticatedPatient.id,
+        doctorProfileId: testContext.doctorProfile.id,
+        specialtyId: testContext.specialty.id,
+        appointmentDate: testContext.appointmentDate!,
+        startTime: testContext.selectedTimeSlot!.startTime,
+        notes: "Attempted booking",
+      },
+    );
+    testContext.errorMessage = undefined;
+  } catch (error: any) {
+    testContext.createdAppointment = undefined;
+    testContext.errorMessage = error?.message ?? String(error);
+  }
+});
+
+Then(
+  "el sistema debe mostrar error de horario no disponible",
+  async function () {
+    expect(testContext.errorMessage).toBeDefined();
+    expect(testContext.createdAppointment).toBeUndefined();
+  },
+);
+
+Then("no se debe registrar la cita", async function () {
+  expect(testContext.createdAppointment).toBeUndefined();
+});
+
+When(
+  'ingresa un email con formato inválido "{string}"',
+  async function (invalidEmail: string) {
+    testContext.appointmentData = {
+      patientId: testContext.authenticatedPatient.id,
+      doctorProfileId: testContext.doctorProfile.id,
+      specialtyId: testContext.specialty.id,
+      appointmentDate: testContext.appointmentDate!,
+      startTime: testContext.selectedTimeSlot!.startTime,
+      notes: "Consulta con email inválido",
+      invalidEmail: invalidEmail,
+    };
+  },
+);
+
+Then("el sistema debe mostrar error de formato de email", async function () {
+  expect(testContext.errorMessage).toBeDefined();
+  expect(testContext.createdAppointment).toBeUndefined();
+});
+
+When('ingresa un RUT inválido "{string}"', async function (invalidRut: string) {
+  testContext.appointmentData = {
+    patientId: testContext.authenticatedPatient.id,
+    doctorProfileId: testContext.doctorProfile.id,
+    specialtyId: testContext.specialty.id,
+    appointmentDate: testContext.appointmentDate!,
+    startTime: testContext.selectedTimeSlot!.startTime,
+    notes: "Consulta con RUT inválido",
+    invalidRut: invalidRut,
+  };
+});
+
+Then("el sistema debe mostrar error de formato de RUT", async function () {
+  expect(testContext.errorMessage).toBeDefined();
+  expect(testContext.createdAppointment).toBeUndefined();
+});
+
+When('agrega notas "{string}"', async function (notes: string) {
+  testContext.appointmentData = {
+    patientId: testContext.authenticatedPatient.id,
+    doctorProfileId: testContext.doctorProfile.id,
+    specialtyId: testContext.specialty.id,
+    appointmentDate: testContext.appointmentDate!,
+    startTime: testContext.selectedTimeSlot!.startTime,
+    notes: notes,
+  };
+});
+
+Then("el sistema guarda la cita con las notas adicionales", async function () {
+  expect(testContext.createdAppointment).toBeDefined();
+  expect(testContext.createdAppointment.id).toBeDefined();
+  expect(testContext.createdAppointment.notes).toBe(
+    "Consulta de control por dolor de cabeza",
+  );
+  expect(testContext.createdAppointment.status).toBe("SCHEDULED");
+});
+
+Given(
+  "que dos pacientes intentan agendar la misma franja horaria al mismo tiempo",
+  async function () {
+    // Create a second patient
+    const patient2 = await createTestUser({
+      name: "María López",
+      email: "maria.lopez@test.com",
+      phone: "+56912345679",
+      rut: "87654321-9",
+      role: "PATIENT",
+    });
+
+    testContext.secondPatient = patient2;
+    testContext.selectedTimeSlot = testContext.availableTimeSlots![0];
+  },
+);
+
+When("ambos pacientes confirman sus datos simultáneamente", async function () {
+  const appointmentData1 = {
+    patientId: testContext.authenticatedPatient.id,
+    doctorProfileId: testContext.doctorProfile.id,
+    specialtyId: testContext.specialty.id,
+    appointmentDate: testContext.appointmentDate!,
+    startTime: testContext.selectedTimeSlot!.startTime,
+    notes: "Paciente 1",
+  };
+
+  const appointmentData2 = {
+    patientId: testContext.secondPatient.id,
+    doctorProfileId: testContext.doctorProfile.id,
+    specialtyId: testContext.specialty.id,
+    appointmentDate: testContext.appointmentDate!,
+    startTime: testContext.selectedTimeSlot!.startTime,
+    notes: "Paciente 2",
+  };
+
+  try {
+    const [result1, result2] = await Promise.allSettled([
+      AppointmentService.createAppointment(appointmentData1),
+      AppointmentService.createAppointment(appointmentData2),
+    ]);
+
+    if (result1.status === "fulfilled") {
+      testContext.createdAppointment = result1.value;
+    }
+    if (result2.status === "fulfilled") {
+      testContext.secondAppointment = result2.value;
+    }
+    if (result1.status === "rejected") {
+      testContext.errorMessage =
+        result1.reason?.message ?? String(result1.reason);
+    }
+    if (result2.status === "rejected") {
+      testContext.secondErrorMessage =
+        result2.reason?.message ?? String(result2.reason);
+    }
+  } catch (error: any) {
+    testContext.errorMessage = error?.message ?? String(error);
+  }
+});
+
+Then("solo uno debe lograr agendar la cita", async function () {
+  const successfulBookings = [
+    testContext.createdAppointment,
+    testContext.secondAppointment,
+  ].filter(Boolean);
+  expect(successfulBookings.length).toBe(1);
+});
+
+Then("el otro debe recibir error de horario no disponible", async function () {
+  expect(
+    testContext.errorMessage || testContext.secondErrorMessage,
+  ).toBeDefined();
 });
