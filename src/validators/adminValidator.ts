@@ -9,9 +9,10 @@ export const adminCreateSchema = z.object({
   password: z
     .string()
     .min(8, "La contraseña debe tener al menos 8 caracteres")
-    .regex(/(?=.*[a-z])/, "Debe contener minúscula")
-    .regex(/(?=.*[A-Z])/, "Debe contener mayúscula")
-    .regex(/(?=.*\d)/, "Debe contener número"),
+    .refine(
+      (pwd) => /[a-z]/.test(pwd) && /[A-Z]/.test(pwd) && /\d/.test(pwd),
+      "La contraseña debe contener al menos: una minúscula, una mayúscula y un número",
+    ),
   role: z
     .enum(["PATIENT", "SECRETARY", "ADMIN", "DOCTOR"])
     .optional()
@@ -43,9 +44,10 @@ export const adminUpdateSchema = z.object({
   password: z
     .string()
     .min(8, "La contraseña debe tener al menos 8 caracteres")
-    .regex(/(?=.*[a-z])/, "Debe contener minúscula")
-    .regex(/(?=.*[A-Z])/, "Debe contener mayúscula")
-    .regex(/(?=.*\d)/, "Debe contener número")
+    .refine(
+      (pwd) => /[a-z]/.test(pwd) && /[A-Z]/.test(pwd) && /\d/.test(pwd),
+      "La contraseña debe contener al menos: una minúscula, una mayúscula y un número",
+    )
     .optional(),
   role: z.enum(["PATIENT", "SECRETARY", "ADMIN", "DOCTOR"]).optional(),
   rut: z.string().optional(),
@@ -80,15 +82,15 @@ export const createScheduleSchema = z.object({
     .max(6, "Día de la semana debe estar entre 0 y 6"),
   startTime: z
     .string()
-    .regex(
-      /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-      "Formato de hora inválido (HH:mm)"
+    .refine(
+      (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time),
+      "Formato de hora inválido (HH:mm)",
     ),
   endTime: z
     .string()
-    .regex(
-      /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-      "Formato de hora inválido (HH:mm)"
+    .refine(
+      (time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time),
+      "Formato de hora inválido (HH:mm)",
     ),
   slotDuration: z.number().min(15).max(120).optional(),
 });
