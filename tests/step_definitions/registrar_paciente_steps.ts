@@ -498,22 +498,24 @@ Then(/el sistema debe mostrar error de seguridad de contraseña/, async () => {
   );
 });
 
-Then(/el sistema debe mostrar error de formato de email/, async () => {
-  assert.ok(ctx.error, "Debería haber un error");
-  assert.ok(
-    ctx.error.message.includes("email") ||
-      ctx.error.message.includes("formato"),
-    `Error no es de formato de email: ${ctx.error.message}`,
-  );
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then(/el sistema debe mostrar error de formato de email/, async () => {
+//   assert.ok(ctx.error, "Debería haber un error");
+//   assert.ok(
+//     ctx.error.message.includes("email") ||
+//       ctx.error.message.includes("formato"),
+//     `Error no es de formato de email: ${ctx.error.message}`,
+//   );
+// });
 
-Then(/el sistema debe mostrar error de formato de RUT/, async () => {
-  assert.ok(ctx.error, "Debería haber un error");
-  assert.ok(
-    ctx.error.message.includes("RUT") || ctx.error.message.includes("formato"),
-    `Error no es de formato de RUT: ${ctx.error.message}`,
-  );
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then(/el sistema debe mostrar error de formato de RUT/, async () => {
+//   assert.ok(ctx.error, "Debería haber un error");
+//   assert.ok(
+//     ctx.error.message.includes("RUT") || ctx.error.message.includes("formato"),
+//     `Error no es de formato de RUT: ${ctx.error.message}`,
+//   );
+// });
 
 Then(/el sistema debe mostrar error de campos requeridos/, async () => {
   assert.ok(ctx.error, "Debería haber un error");

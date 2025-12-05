@@ -101,12 +101,8 @@ Before(async () => {
   ctx.conflictingAppointments = [];
 });
 
-/* -----------------------
-   Background y setup
-   ----------------------- */
-Given(/que la base de datos está limpia/, async () => {
-  await cleanDatabase();
-});
+// Background steps - using registrar_secretario_steps.ts implementation
+// Step removed to avoid duplication
 
 Given(
   /que soy un médico autenticado con nombre "(.*)"/,

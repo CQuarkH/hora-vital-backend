@@ -263,10 +263,11 @@ Then("mi perfil no debe ser actualizado", async () => {
   expect(profileCtx.errorMessage).toBeDefined();
 });
 
-Then("el sistema debe mostrar error de formato de email", async () => {
-  expect(profileCtx.errorMessage).toBeDefined();
-  expect(profileCtx.updatedProfile).toBeUndefined();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("el sistema debe mostrar error de formato de email", async () => {
+//   expect(profileCtx.errorMessage).toBeDefined();
+//   expect(profileCtx.updatedProfile).toBeUndefined();
+// });
 
 Then("el sistema debe mostrar error de formato de teléfono", async () => {
   expect(profileCtx.errorMessage).toBeDefined();
