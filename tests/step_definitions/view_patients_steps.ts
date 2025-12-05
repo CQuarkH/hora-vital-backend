@@ -166,14 +166,15 @@ Given("que soy un médico autenticado", async () => {
   });
 });
 
-Given("que soy un paciente autenticado", async () => {
-  viewPatientsCtx.authenticatedUser = await createUserInDb("patient", {
-    name: "Patient User",
-    email: "patient@test.com",
-    phone: "+56912345678",
-    rut: "33333333-3",
-  });
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Given("que soy un paciente autenticado", async () => {
+//   viewPatientsCtx.authenticatedUser = await createUserInDb("patient", {
+//     name: "Patient User",
+//     email: "patient@test.com",
+//     phone: "+56912345678",
+//     rut: "33333333-3",
+//   });
+// });
 
 Given("que no estoy autenticado", async () => {
   viewPatientsCtx.authenticatedUser = undefined;

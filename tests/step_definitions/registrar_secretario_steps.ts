@@ -87,23 +87,24 @@ async function createAdminUser() {
   });
 }
 
-// Background steps
-Given("que la base de datos está limpia", async () => {
-  await cleanDatabase();
-});
+// Background steps - COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Given("que la base de datos está limpia", async () => {
+//   await cleanDatabase();
+// });
 
 Given("que soy un administrador autenticado", async () => {
   registrarSecretarioCtx.authenticatedUser = await createAdminUser();
 });
 
-Given("que soy un médico autenticado", async () => {
-  registrarSecretarioCtx.authenticatedUser = await createUserInDb("doctor", {
-    name: "Dr. Smith",
-    email: "doctor@hospital.com",
-    phone: "+56987654321",
-    rut: "98765432-1",
-  });
-});
+// COMMENTED TO AVOID DUPLICATION
+// Given("que soy un médico autenticado", async () => {
+//   registrarSecretarioCtx.authenticatedUser = await createUserInDb("doctor", {
+//     name: "Dr. Smith",
+//     email: "doctor@hospital.com",
+//     phone: "+56987654321",
+//     rut: "98765432-1",
+//   });
+// });
 
 Given('que existe un usuario con email "{string}"', async (email: string) => {
   registrarSecretarioCtx.existingUser = await createUserInDb("patient", {
@@ -469,27 +470,27 @@ Then("el sistema debe mostrar error de datos faltantes", async () => {
   expect(isValidationError).toBeTruthy();
 });
 
-Then("el sistema debe mostrar error de formato de RUT", async () => {
-  expect(registrarSecretarioCtx.errorMessage).toBeDefined();
-  const isRutError =
-    registrarSecretarioCtx.errorMessage!.includes("RUT") ||
-    registrarSecretarioCtx.errorMessage!.includes("formato") ||
-    registrarSecretarioCtx.errorMessage!.includes("inválido");
-  expect(isRutError).toBeTruthy();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("el sistema debe mostrar error de formato de RUT", async () => {
+//   expect(registrarSecretarioCtx.errorMessage).toBeDefined();
+//   const isRutError =
+//     registrarSecretarioCtx.errorMessage!.includes("RUT") ||
+//     registrarSecretarioCtx.errorMessage!.includes("formato") ||
+//     registrarSecretarioCtx.errorMessage!.includes("inválido");
+//   expect(isRutError).toBeTruthy();
+// });
 
-Then("el sistema debe denegar el acceso", async () => {
-  expect(registrarSecretarioCtx.errorMessage).toBeDefined();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("el sistema debe denegar el acceso", async () => {
+//   expect(registrarSecretarioCtx.response).toBeDefined();
+//   expect(registrarSecretarioCtx.response?.status).toBe(403);
+// });
 
-Then("debo recibir error de autorización", async () => {
-  expect(registrarSecretarioCtx.errorMessage).toBeDefined();
-  const hasAuthError =
-    registrarSecretarioCtx.errorMessage!.includes("autorización") ||
-    registrarSecretarioCtx.errorMessage!.includes("autorizado") ||
-    registrarSecretarioCtx.errorMessage!.includes("unauthorized");
-  expect(hasAuthError).toBeTruthy();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("debo recibir error de autorización", async () => {
+//   expect(registrarSecretarioCtx.response).toBeDefined();
+//   expect(registrarSecretarioCtx.response?.status).toBe(403);
+// });
 
 Then("el sistema debe mostrar error de longitud de nombre", async () => {
   expect(registrarSecretarioCtx.errorMessage).toBeDefined();

@@ -397,13 +397,14 @@ When("el paciente intenta agendar en esa franja horaria", async function () {
   }
 });
 
-Then(
-  "el sistema debe mostrar error de horario no disponible",
-  async function () {
-    expect(testContext.errorMessage).toBeDefined();
-    expect(testContext.createdAppointment).toBeUndefined();
-  },
-);
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then(
+//   "el sistema debe mostrar error de horario no disponible",
+//   async function () {
+//     expect(testContext.errorMessage).toBeDefined();
+//     expect(testContext.createdAppointment).toBeUndefined();
+//   },
+// );
 
 Then("no se debe registrar la cita", async function () {
   expect(testContext.createdAppointment).toBeUndefined();
@@ -424,10 +425,11 @@ When(
   },
 );
 
-Then("el sistema debe mostrar error de formato de email", async function () {
-  expect(testContext.errorMessage).toBeDefined();
-  expect(testContext.createdAppointment).toBeUndefined();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("el sistema debe mostrar error de formato de email", async function () {
+//   expect(testContext.errorMessage).toBeDefined();
+//   expect(testContext.createdAppointment).toBeUndefined();
+// });
 
 When('ingresa un RUT inválido "{string}"', async function (invalidRut: string) {
   testContext.appointmentData = {
@@ -441,10 +443,11 @@ When('ingresa un RUT inválido "{string}"', async function (invalidRut: string) 
   };
 });
 
-Then("el sistema debe mostrar error de formato de RUT", async function () {
-  expect(testContext.errorMessage).toBeDefined();
-  expect(testContext.createdAppointment).toBeUndefined();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("el sistema debe mostrar error de formato de RUT", async function () {
+//   expect(testContext.errorMessage).toBeDefined();
+//   expect(testContext.createdAppointment).toBeUndefined();
+// });
 
 When('agrega notas "{string}"', async function (notes: string) {
   testContext.appointmentData = {

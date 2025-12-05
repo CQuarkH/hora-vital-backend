@@ -177,7 +177,7 @@ describe("appointmentController (unit)", () => {
         message: "",
       });
       mockedAppointmentService.checkAppointmentConflict.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
 
       await AppointmentController.createAppointment(req, res);
@@ -204,7 +204,7 @@ describe("appointmentController (unit)", () => {
       });
       mockedAppointmentService.checkAppointmentConflict.mockResolvedValue(null);
       mockedAppointmentService.checkPatientDuplicateAppointment.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
 
       await AppointmentController.createAppointment(req, res);
@@ -212,6 +212,67 @@ describe("appointmentController (unit)", () => {
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
         message: "Ya tienes una cita con este médico en la misma fecha",
+      });
+    });
+
+    it("handles P2002 database constraint error", async () => {
+      const req: any = { ...baseReq };
+      const res = createMockResponse();
+
+      mockedAppointmentService.findDoctorProfile.mockResolvedValue({
+        specialtyId: "s1",
+      } as any);
+      mockedAppointmentService.findSpecialty.mockResolvedValue({
+        id: "s1",
+      } as any);
+      mockedAppointmentService.validateDoctorSchedule.mockResolvedValue({
+        isValid: true,
+        message: "",
+      });
+      mockedAppointmentService.checkAppointmentConflict.mockResolvedValue(null);
+      mockedAppointmentService.checkPatientDuplicateAppointment.mockResolvedValue(
+        null,
+      );
+
+      const error = new Error("Unique constraint failed");
+      (error as any).code = "P2002";
+      mockedAppointmentService.createAppointment.mockRejectedValue(error);
+
+      await AppointmentController.createAppointment(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "El horario ya está reservado",
+      });
+    });
+
+    it("handles unexpected database errors", async () => {
+      const req: any = { ...baseReq };
+      const res = createMockResponse();
+
+      mockedAppointmentService.findDoctorProfile.mockResolvedValue({
+        specialtyId: "s1",
+      } as any);
+      mockedAppointmentService.findSpecialty.mockResolvedValue({
+        id: "s1",
+      } as any);
+      mockedAppointmentService.validateDoctorSchedule.mockResolvedValue({
+        isValid: true,
+        message: "",
+      });
+      mockedAppointmentService.checkAppointmentConflict.mockResolvedValue(null);
+      mockedAppointmentService.checkPatientDuplicateAppointment.mockResolvedValue(
+        null,
+      );
+
+      const error = new Error("Database connection failed");
+      mockedAppointmentService.createAppointment.mockRejectedValue(error);
+
+      await AppointmentController.createAppointment(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Error de servidor",
       });
     });
 
@@ -231,10 +292,10 @@ describe("appointmentController (unit)", () => {
       });
       mockedAppointmentService.checkAppointmentConflict.mockResolvedValue(null);
       mockedAppointmentService.checkPatientDuplicateAppointment.mockResolvedValue(
-        null
+        null,
       );
       mockedAppointmentService.createAppointment.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
 
       await AppointmentController.createAppointment(req, res);
@@ -323,10 +384,10 @@ describe("appointmentController (unit)", () => {
     it("cancels appointment successfully", async () => {
       const res = createMockResponse();
       mockedAppointmentService.findAppointmentById.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
       mockedAppointmentService.cancelAppointment.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
 
       await AppointmentController.cancelAppointment(baseReq, res);
@@ -393,7 +454,7 @@ describe("appointmentController (unit)", () => {
     it("should update appointment successfully", async () => {
       const res = createMockResponse();
       mockedAppointmentService.findAppointmentById.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
       mockedAppointmentService.updateAppointment.mockResolvedValue({
         ...fakeAppointment,
@@ -427,7 +488,7 @@ describe("appointmentController (unit)", () => {
       };
       const res = createMockResponse();
       mockedAppointmentService.findAppointmentById.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
 
       await AppointmentController.updateAppointment(req, res);
@@ -456,10 +517,10 @@ describe("appointmentController (unit)", () => {
     it("returns 409 when new time slot not available", async () => {
       const res = createMockResponse();
       mockedAppointmentService.findAppointmentById.mockResolvedValue(
-        fakeAppointment
+        fakeAppointment,
       );
       mockedAppointmentService.updateAppointment.mockRejectedValue(
-        new Error("The time slot is already reserved")
+        new Error("The time slot is already reserved"),
       );
 
       await AppointmentController.updateAppointment(baseReq, res);
@@ -467,6 +528,385 @@ describe("appointmentController (unit)", () => {
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
         message: "El horario ya está reservado",
+      });
+    });
+
+    it("returns 404 when doctor not found during update", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.updateAppointment.mockRejectedValue(
+        new Error("Doctor not found"),
+      );
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Médico no encontrado",
+      });
+    });
+
+    it("returns 404 when appointment not found during update service call", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.updateAppointment.mockRejectedValue(
+        new Error("Appointment not found"),
+      );
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Cita no encontrada",
+      });
+    });
+
+    it("returns 400 when doctor doesn't belong to specialty", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.updateAppointment.mockRejectedValue(
+        new Error("Doctor does not belong to the selected specialty"),
+      );
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Doctor does not belong to the selected specialty",
+      });
+    });
+
+    it("returns 500 for unexpected errors during update", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.updateAppointment.mockRejectedValue(
+        new Error("Database connection failed"),
+      );
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Error de servidor",
+      });
+    });
+
+    it("allows SECRETARY to update patient appointments", async () => {
+      const req: any = {
+        ...baseReq,
+        user: { id: "secretary-id", role: "SECRETARY" },
+      };
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.updateAppointment.mockResolvedValue({
+        ...fakeAppointment,
+        notes: "Updated by secretary",
+      });
+
+      await AppointmentController.updateAppointment(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Cita actualizada exitosamente",
+        appointment: expect.objectContaining({
+          notes: "Updated by secretary",
+        }),
+      });
+    });
+
+    it("allows ADMIN to update patient appointments", async () => {
+      const req: any = {
+        ...baseReq,
+        user: { id: "admin-id", role: "ADMIN" },
+      };
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.updateAppointment.mockResolvedValue({
+        ...fakeAppointment,
+        notes: "Updated by admin",
+      });
+
+      await AppointmentController.updateAppointment(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Cita actualizada exitosamente",
+        appointment: expect.objectContaining({
+          notes: "Updated by admin",
+        }),
+      });
+    });
+
+    it("returns 400 for completed appointment", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue({
+        ...fakeAppointment,
+        status: "COMPLETED",
+      });
+
+      await AppointmentController.updateAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "No se puede editar una cita completada",
+      });
+    });
+
+    it("returns 401 if user not authenticated", async () => {
+      const req: any = { ...baseReq, user: undefined };
+      const res = createMockResponse();
+
+      await AppointmentController.updateAppointment(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Usuario no autenticado",
+      });
+    });
+  });
+
+  describe("cancelAppointment", () => {
+    const baseReq: any = {
+      user: { id: "p1" },
+      params: { id: "a1" },
+      body: { cancellationReason: "No puedo asistir" },
+    };
+
+    it("returns 401 if user not authenticated", async () => {
+      const req: any = { ...baseReq, user: undefined };
+      const res = createMockResponse();
+
+      await AppointmentController.cancelAppointment(req, res);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Usuario no autenticado",
+      });
+    });
+
+    it("returns 404 if appointment not found", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(null);
+
+      await AppointmentController.cancelAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: "Cita no encontrada" });
+    });
+
+    it("returns 403 if user is not owner", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue({
+        ...fakeAppointment,
+        patientId: "other",
+      });
+
+      await AppointmentController.cancelAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "No tienes permisos para cancelar esta cita",
+      });
+    });
+
+    it("returns 400 if already cancelled", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue({
+        ...fakeAppointment,
+        status: "CANCELLED",
+      });
+
+      await AppointmentController.cancelAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "La cita ya está cancelada",
+      });
+    });
+
+    it("returns 400 if completed", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue({
+        ...fakeAppointment,
+        status: "COMPLETED",
+      });
+
+      await AppointmentController.cancelAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "No se puede cancelar una cita completada",
+      });
+    });
+
+    it("cancels appointment successfully", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.cancelAppointment.mockResolvedValue(
+        fakeAppointment,
+      );
+
+      await AppointmentController.cancelAppointment(baseReq, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Cita cancelada exitosamente",
+        appointment: fakeAppointment,
+      });
+    });
+
+    it("returns 500 for unexpected errors during cancellation", async () => {
+      const res = createMockResponse();
+      mockedAppointmentService.findAppointmentById.mockResolvedValue(
+        fakeAppointment,
+      );
+      mockedAppointmentService.cancelAppointment.mockRejectedValue(
+        new Error("Database connection failed"),
+      );
+
+      await AppointmentController.cancelAppointment(baseReq, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Error de servidor",
+      });
+    });
+  });
+
+  describe("getMyAppointments", () => {
+    it("returns 401 if user not authenticated", async () => {
+      const req: any = { user: undefined, query: {} };
+      const res = createMockResponse();
+
+      await AppointmentController.getMyAppointments(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
+
+    it("returns appointments", async () => {
+      const req: any = { user: { id: "p1" }, query: {} };
+      const res = createMockResponse();
+      mockedAppointmentService.findPatientAppointments.mockResolvedValue([
+        fakeAppointment,
+      ]);
+
+      await AppointmentController.getMyAppointments(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        appointments: [fakeAppointment],
+      });
+    });
+
+    it("returns appointments with filters", async () => {
+      const req: any = {
+        user: { id: "p1" },
+        query: {
+          status: "SCHEDULED",
+          dateFrom: "2024-12-01",
+          dateTo: "2024-12-31",
+        },
+      };
+      const res = createMockResponse();
+      mockedAppointmentService.findPatientAppointments.mockResolvedValue([
+        fakeAppointment,
+      ]);
+
+      await AppointmentController.getMyAppointments(req, res);
+
+      expect(
+        mockedAppointmentService.findPatientAppointments,
+      ).toHaveBeenCalledWith("p1", {
+        status: "SCHEDULED",
+        dateFrom: new Date("2024-12-01"),
+        dateTo: new Date("2024-12-31"),
+      });
+      expect(res.json).toHaveBeenCalledWith({
+        appointments: [fakeAppointment],
+      });
+    });
+
+    it("returns 500 for unexpected errors", async () => {
+      const req: any = { user: { id: "p1" }, query: {} };
+      const res = createMockResponse();
+      mockedAppointmentService.findPatientAppointments.mockRejectedValue(
+        new Error("Database connection failed"),
+      );
+
+      await AppointmentController.getMyAppointments(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Error de servidor",
+      });
+    });
+  });
+
+  describe("getAvailability", () => {
+    it("returns available slots", async () => {
+      const req: any = { query: { date: "2025-11-02", specialtyId: "s1" } };
+      const res = createMockResponse();
+      mockedAppointmentService.getAvailableTimeSlots.mockResolvedValue([
+        "08:00",
+        "09:00",
+      ]);
+
+      await AppointmentController.getAvailability(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        availableSlots: ["08:00", "09:00"],
+      });
+    });
+
+    it("returns available slots with all filters", async () => {
+      const req: any = {
+        query: {
+          date: "2025-11-02",
+          specialtyId: "s1",
+          doctorProfileId: "d1",
+        },
+      };
+      const res = createMockResponse();
+      mockedAppointmentService.getAvailableTimeSlots.mockResolvedValue([
+        "08:00",
+        "09:00",
+      ]);
+
+      await AppointmentController.getAvailability(req, res);
+
+      expect(
+        mockedAppointmentService.getAvailableTimeSlots,
+      ).toHaveBeenCalledWith({
+        date: new Date("2025-11-02"),
+        specialtyId: "s1",
+        doctorProfileId: "d1",
+      });
+      expect(res.json).toHaveBeenCalledWith({
+        availableSlots: ["08:00", "09:00"],
+      });
+    });
+
+    it("returns 500 for unexpected errors", async () => {
+      const req: any = { query: { date: "2025-11-02", specialtyId: "s1" } };
+      const res = createMockResponse();
+      mockedAppointmentService.getAvailableTimeSlots.mockRejectedValue(
+        new Error("Database connection failed"),
+      );
+
+      await AppointmentController.getAvailability(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({
+        message: "Error de servidor",
       });
     });
   });

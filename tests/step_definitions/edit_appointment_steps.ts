@@ -103,15 +103,16 @@ async function createTestAppointment(appointmentData: any) {
 }
 
 // Background steps
-Given("que soy un paciente autenticado", async () => {
-  editCtx.authenticatedPatient = await createUserInDb("patient", {
-    name: "Juan Pérez",
-    email: "juan@example.com",
-    phone: "+56912345678",
-    rut: "12345678-9",
-    role: "PATIENT",
-  });
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Given("que soy un paciente autenticado", async () => {
+//   editCtx.authenticatedPatient = await createUserInDb("patient", {
+//     name: "Juan Pérez",
+//     email: "juan@example.com",
+//     phone: "+56912345678",
+//     rut: "12345678-9",
+//     role: "PATIENT",
+//   });
+// });
 
 Given("que tengo una cita programada", async () => {
   // Create specialty and doctor
@@ -522,10 +523,7 @@ Then(
   },
 );
 
-Then("el sistema debe mostrar error de horario no disponible", async () => {
-  expect(editCtx.errorMessage).toBeDefined();
-  expect(editCtx.errorMessage).toContain("reserved");
-});
+// Step removed to avoid duplication - using appointment_steps.ts implementation
 
 Then("mi cita original debe permanecer sin cambios", async () => {
   expect(editCtx.updatedAppointment).toBe(undefined);
@@ -548,9 +546,10 @@ Then("la cita debe permanecer sin cambios", async () => {
   expect(editCtx.updatedAppointment).toBe(undefined);
 });
 
-Then("el sistema debe denegar el acceso", async () => {
-  expect(editCtx.errorMessage).toBeDefined();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("el sistema debe denegar el acceso", async () => {
+//   expect(editCtx.errorMessage).toBeDefined();
+// });
 
 Then("debo recibir error de autorización", async () => {
   expect(editCtx.errorMessage).toBeDefined();

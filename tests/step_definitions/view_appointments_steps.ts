@@ -561,9 +561,10 @@ Then("la lista debe estar vacía", async () => {
   expect(viewCtx.appointments!).toHaveLength(0);
 });
 
-Then("el sistema debe denegar el acceso", async () => {
-  expect(viewCtx.errorMessage).toBeDefined();
-});
+// COMMENTED TO AVOID DUPLICATION - using common_steps.ts
+// Then("el sistema debe denegar el acceso", async () => {
+//   expect(viewCtx.errorMessage).toBeDefined();
+// });
 
 Then("debo recibir error de autorización", async () => {
   expect(viewCtx.errorMessage).toBeDefined();
